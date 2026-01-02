@@ -6,13 +6,143 @@ enum FormulaError: Error {
     case divisionByZero
     case circularReference
     case invalidOperator
+    case invalidFunction
+    case invalidRange
 }
 
 class FormulaEngine {
     func evaluate(formula: String, getCellValue: @escaping (Int, Int) -> String) throws -> String {
-        let processedFormula = try replaceCellReferences(formula: formula, getCellValue: getCellValue)
+        // First process functions (SUM, PRODUCT, AVERAGE)
+        var processedFormula = try processFunctions(formula: formula, getCellValue: getCellValue)
+
+        // Then replace any remaining cell references
+        processedFormula = try replaceCellReferences(formula: processedFormula, getCellValue: getCellValue)
+
+        // Finally evaluate the expression
         let result = try evaluateExpression(processedFormula)
         return formatResult(result)
+    }
+
+    private func processFunctions(formula: String, getCellValue: @escaping (Int, Int) -> String) throws -> String {
+        var result = formula
+
+        // Match function calls like SUM(A1:A10), AVERAGE(B1:B5), etc.
+        let pattern = "(SUM|PRODUCT|AVERAGE)\\s*\\(([^)]+)\\)"
+        let regex = try NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+
+        // Process functions in reverse order to maintain string indices
+        let matches = regex.matches(in: result, options: [], range: NSRange(result.startIndex..., in: result))
+
+        for match in matches.reversed() {
+            guard let functionRange = Range(match.range(at: 1), in: result),
+                  let argsRange = Range(match.range(at: 2), in: result) else {
+                continue
+            }
+
+            let functionName = String(result[functionRange]).uppercased()
+            let args = String(result[argsRange])
+
+            // Evaluate the function
+            let functionResult = try evaluateFunction(functionName: functionName, args: args, getCellValue: getCellValue)
+
+            // Replace the function call with the result
+            let fullRange = match.range
+            if let swiftRange = Range(fullRange, in: result) {
+                result.replaceSubrange(swiftRange, with: String(functionResult))
+            }
+        }
+
+        return result
+    }
+
+    private func evaluateFunction(functionName: String, args: String, getCellValue: @escaping (Int, Int) -> String) throws -> Double {
+        // Parse the arguments (can be ranges or individual cells separated by commas)
+        let argList = args.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        var values: [Double] = []
+
+        for arg in argList {
+            if arg.contains(":") {
+                // It's a range like A1:A10
+                let rangeValues = try parseRange(range: arg, getCellValue: getCellValue)
+                values.append(contentsOf: rangeValues)
+            } else {
+                // It's a single cell reference
+                let cellValue = try parseSingleCell(cell: arg, getCellValue: getCellValue)
+                values.append(cellValue)
+            }
+        }
+
+        // Apply the function
+        switch functionName {
+        case "SUM":
+            return values.reduce(0, +)
+        case "PRODUCT":
+            return values.isEmpty ? 0 : values.reduce(1, *)
+        case "AVERAGE":
+            return values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
+        default:
+            throw FormulaError.invalidFunction
+        }
+    }
+
+    private func parseRange(range: String, getCellValue: @escaping (Int, Int) -> String) throws -> [Double] {
+        let parts = range.split(separator: ":").map { String($0).trimmingCharacters(in: .whitespaces) }
+        guard parts.count == 2 else {
+            throw FormulaError.invalidRange
+        }
+
+        let (startRow, startCol) = try parseCellReference(parts[0])
+        let (endRow, endCol) = try parseCellReference(parts[1])
+
+        var values: [Double] = []
+
+        // Handle both row ranges (A1:A10) and rectangular ranges (A1:B10)
+        for row in min(startRow, endRow)...max(startRow, endRow) {
+            for col in min(startCol, endCol)...max(startCol, endCol) {
+                let cellValue = getCellValue(row, col)
+                if let numValue = Double(cellValue), !cellValue.isEmpty {
+                    values.append(numValue)
+                } else if !cellValue.isEmpty {
+                    // Try to handle non-numeric values
+                    values.append(0)
+                }
+            }
+        }
+
+        return values
+    }
+
+    private func parseSingleCell(cell: String, getCellValue: @escaping (Int, Int) -> String) throws -> Double {
+        let (row, col) = try parseCellReference(cell)
+        let cellValue = getCellValue(row, col)
+
+        if let numValue = Double(cellValue), !cellValue.isEmpty {
+            return numValue
+        } else {
+            return 0
+        }
+    }
+
+    private func parseCellReference(_ reference: String) throws -> (row: Int, col: Int) {
+        let pattern = "^([A-Z]+)([0-9]+)$"
+        let regex = try NSRegularExpression(pattern: pattern, options: [])
+        let nsRange = NSRange(reference.startIndex..., in: reference)
+
+        guard let match = regex.firstMatch(in: reference, options: [], range: nsRange),
+              let columnRange = Range(match.range(at: 1), in: reference),
+              let rowRange = Range(match.range(at: 2), in: reference) else {
+            throw FormulaError.invalidCellReference
+        }
+
+        let columnStr = String(reference[columnRange])
+        let rowStr = String(reference[rowRange])
+
+        guard let row = Int(rowStr), row > 0 else {
+            throw FormulaError.invalidCellReference
+        }
+
+        let column = columnNameToIndex(columnStr)
+        return (row - 1, column)
     }
 
     private func replaceCellReferences(formula: String, getCellValue: @escaping (Int, Int) -> String) throws -> String {

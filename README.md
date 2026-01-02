@@ -7,6 +7,7 @@ A macOS menu bar calculator app with Excel-like formula capabilities, inspired b
 - **Menu Bar Integration**: Lives in your macOS menu bar for quick access
 - **Excel-like Grid**: 20x10 spreadsheet-style grid for organizing calculations
 - **Formula Support**: Create formulas using `=` prefix (e.g., `=A1+B2*C3`)
+- **Excel Functions**: Support for SUM, PRODUCT, and AVERAGE with range notation
 - **Cell References**: Reference other cells using standard Excel notation (A1, B2, etc.)
 - **Auto-calculation**: Formulas automatically recalculate when dependencies change
 - **Lightweight**: Native SwiftUI app with minimal resource usage
@@ -70,6 +71,25 @@ Click the 🧮 icon in your menu bar to open the calculator popover.
   - Division: `/`
   - Parentheses: `()`
 
+- **Excel functions**: Use built-in functions for common calculations
+  - **SUM**: Adds all values in a range
+    - Example: `=SUM(A1:A10)` → Sums cells A1 through A10
+    - Example: `=SUM(A1:B5)` → Sums rectangular range A1 to B5
+    - Example: `=SUM(A1,B2,C3)` → Sums specific cells
+
+  - **PRODUCT**: Multiplies all values in a range
+    - Example: `=PRODUCT(A1:A5)` → Multiplies cells A1 through A5
+    - Example: `=PRODUCT(A1,B1,C1)` → Multiplies specific cells
+
+  - **AVERAGE**: Calculates the average of values in a range
+    - Example: `=AVERAGE(A1:A10)` → Averages cells A1 through A10
+    - Example: `=AVERAGE(B1:B20)` → Averages cells B1 through B20
+
+- **Combining functions and operators**:
+  - Example: `=SUM(A1:A10)*2` → Sums A1:A10 and multiplies result by 2
+  - Example: `=(SUM(A1:A5)+SUM(B1:B5))/2` → Averages two sums
+  - Example: `=A1+SUM(B1:B10)` → Adds A1 to the sum of B1:B10
+
 ### Examples
 
 1. **Simple calculation**:
@@ -88,6 +108,27 @@ Click the 🧮 icon in your menu bar to open the calculator popover.
    - Cell B1: `20`
    - Cell C1: `30`
    - Cell D1: `=(A1+B1)*C1` → Result: `900`
+
+4. **Using SUM function**:
+   - Cells A1-A5: `10`, `20`, `30`, `40`, `50`
+   - Cell A6: `=SUM(A1:A5)` → Result: `150`
+   - Cell A7: `=SUM(A1:A5)/5` → Result: `30` (manual average)
+
+5. **Using AVERAGE function**:
+   - Cells B1-B10: `5`, `10`, `15`, `20`, `25`, `30`, `35`, `40`, `45`, `50`
+   - Cell B11: `=AVERAGE(B1:B10)` → Result: `27.5`
+
+6. **Using PRODUCT function**:
+   - Cell C1: `2`
+   - Cell C2: `3`
+   - Cell C3: `4`
+   - Cell C4: `=PRODUCT(C1:C3)` → Result: `24`
+
+7. **Combining functions**:
+   - Cells A1-A5: Monthly sales
+   - Cell A6: `=SUM(A1:A5)` → Total sales
+   - Cell A7: `=AVERAGE(A1:A5)` → Average sales
+   - Cell A8: `=A6*0.1` → 10% commission on total
 
 ## Project Structure
 
@@ -116,10 +157,11 @@ BlueNapkin/
 
 ### Formula Evaluation
 
-The formula engine works in two stages:
+The formula engine works in three stages:
 
-1. **Cell Reference Replacement**: Replaces cell references (e.g., `A1`, `B2`) with their actual values
-2. **Expression Evaluation**: Evaluates the mathematical expression using `NSExpression`
+1. **Function Processing**: Recognizes and evaluates Excel functions (SUM, PRODUCT, AVERAGE) with range support
+2. **Cell Reference Replacement**: Replaces cell references (e.g., `A1`, `B2`) with their actual values
+3. **Expression Evaluation**: Evaluates the mathematical expression using `NSExpression`
 
 ### Auto-recalculation
 
@@ -161,7 +203,7 @@ button.image = NSImage(named: "YourIconName")
 
 ## Known Limitations
 
-- No support for advanced Excel functions (SUM, AVERAGE, etc.) yet
+- Limited Excel function support (currently: SUM, PRODUCT, AVERAGE)
 - No data persistence (calculations are lost when app closes)
 - No copy/paste functionality
 - No keyboard navigation between cells
@@ -169,16 +211,19 @@ button.image = NSImage(named: "YourIconName")
 
 ## Future Enhancements
 
+- [x] Implement basic Excel functions (SUM, PRODUCT, AVERAGE) ✓
+- [ ] Add more Excel functions (MIN, MAX, COUNT, IF, ROUND, etc.)
 - [ ] Add data persistence (save/load calculations)
-- [ ] Implement Excel functions (SUM, AVERAGE, MIN, MAX, etc.)
 - [ ] Add keyboard navigation (arrow keys, Tab)
 - [ ] Add copy/paste support
-- [ ] Add cell formatting (colors, alignment)
+- [ ] Add cell formatting (colors, alignment, number formats)
 - [ ] Add multiple sheets/tabs
 - [ ] Add export to CSV/Excel
 - [ ] Add customizable keyboard shortcuts
 - [ ] Add themes (dark mode support)
 - [ ] Add history/undo functionality
+- [ ] Add named ranges
+- [ ] Add conditional formatting
 
 ## Troubleshooting
 

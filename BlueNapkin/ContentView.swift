@@ -34,7 +34,7 @@ struct ContentView: View {
 
             // Footer with info
             HStack {
-                Text("Tip: Start formulas with '=' (e.g., =A1+B2)")
+                Text("Tip: Use formulas like =A1+B2 or functions like =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .padding(.leading, 12)
