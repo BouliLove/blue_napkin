@@ -8,6 +8,7 @@ A macOS menu bar calculator app with Excel-like formula capabilities, inspired b
 - **Excel-like Grid**: 20x10 spreadsheet-style grid for organizing calculations
 - **Formula Support**: Create formulas using `=` prefix (e.g., `=A1+B2*C3`)
 - **Excel Functions**: Support for SUM, PRODUCT, and AVERAGE with range notation
+- **Interactive Cell Selection**: Click or drag to select cells/ranges while building formulas
 - **Cell References**: Reference other cells using standard Excel notation (A1, B2, etc.)
 - **Auto-calculation**: Formulas automatically recalculate when dependencies change
 - **Lightweight**: Native SwiftUI app with minimal resource usage
@@ -51,6 +52,48 @@ Click the 🧮 icon in your menu bar to open the calculator popover.
 2. Double-click any cell to start editing
 3. Enter a value or formula
 4. Press `Enter` to commit the value
+
+### Interactive Cell Selection
+
+BlueNapkin supports visual cell selection while building formulas - no need to type cell references manually!
+
+**How to use:**
+
+1. **Start a formula**: Double-click a cell and type `=` to begin a formula
+2. **Click to select**: Click any other cell to select it (highlighted in green)
+3. **Click and drag**: Click and drag across cells to select a range
+4. **Insert reference**: Press `Enter` to insert the cell/range reference into your formula
+5. **Continue editing**: Type operators or functions, then select more cells as needed
+
+**Examples:**
+
+- **Single cell reference**:
+  1. In cell C1, type `=`
+  2. Click cell A1 (it turns green)
+  3. Press `Enter` → formula becomes `=A1`
+  4. Type `+`
+  5. Click cell B1
+  6. Press `Enter` → formula becomes `=A1+B1`
+  7. Press `Enter` again to commit
+
+- **Range selection for SUM**:
+  1. In cell A11, type `=SUM(`
+  2. Click and drag from A1 to A10 (range turns green)
+  3. Press `Enter` → formula becomes `=SUM(A1:A10`
+  4. Type `)`
+  5. Press `Enter` to commit
+
+- **Multiple ranges**:
+  1. Type `=SUM(`
+  2. Click-drag A1:A5, press `Enter`
+  3. Type `,`
+  4. Click-drag B1:B5, press `Enter`
+  5. Formula becomes `=SUM(A1:A5,B1:B5)`
+
+**Visual feedback:**
+- 🔵 **Blue border**: Currently editing cell
+- 🟢 **Green highlight**: Selected cells/range during formula editing
+- **Green border**: Selected range boundary
 
 ### Formula Syntax
 
