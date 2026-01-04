@@ -20,12 +20,12 @@ Click the 🧮 icon in your menu bar to open the calculator popover.
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- Xcode 14.0 or later
 - Swift 5.9 or later
+- Xcode 14.0+ (for building) OR Swift command-line tools
 
 ## Installation
 
-### Building from Source
+### Option 1: Build with Xcode (Easiest)
 
 1. Clone this repository:
    ```bash
@@ -33,16 +33,83 @@ Click the 🧮 icon in your menu bar to open the calculator popover.
    cd blue_napkin
    ```
 
-2. Open the project in Xcode:
+2. Open in Xcode:
    ```bash
-   open BlueNapkin.xcodeproj
+   open Package.swift
    ```
 
-3. Build and run the project:
+3. Build and run:
    - Press `Cmd + R` to build and run
    - Or select `Product > Run` from the menu
 
-4. The app will launch and appear in your menu bar as a 🧮 icon
+### Option 2: Build from Command Line
+
+```bash
+# Build the project
+swift build -c release
+
+# Run the app
+open .build/release/BlueNapkin.app
+```
+
+### Option 3: Use with VSCode
+
+1. **Install VSCode Swift Extension**:
+   - Install `Swift` extension by Swift Server Work Group
+   - Or `Swift Language` by swift-server
+
+2. **Open the project**:
+   ```bash
+   code .
+   ```
+
+3. **Build and run**:
+   ```bash
+   # In VSCode terminal
+   swift build -c release
+   open .build/release/BlueNapkin.app
+
+   # Or for development
+   swift run
+   ```
+
+4. **VSCode Tasks** (optional) - Create `.vscode/tasks.json`:
+   ```json
+   {
+     "version": "2.0.0",
+     "tasks": [
+       {
+         "label": "Build BlueNapkin",
+         "type": "shell",
+         "command": "swift",
+         "args": ["build", "-c", "release"],
+         "group": {
+           "kind": "build",
+           "isDefault": true
+         }
+       },
+       {
+         "label": "Run BlueNapkin",
+         "type": "shell",
+         "command": "swift",
+         "args": ["run"],
+         "group": {
+           "kind": "test",
+           "isDefault": true
+         }
+       }
+     ]
+   }
+   ```
+
+### Building from Source
+
+The project uses **Swift Package Manager**, so it works with:
+- ✅ Xcode (open `Package.swift`)
+- ✅ VSCode (with Swift extension)
+- ✅ Command line (`swift build`)
+
+The app will appear in your menu bar as a 🧮 icon.
 
 ## Usage
 
@@ -176,17 +243,21 @@ BlueNapkin supports visual cell selection while building formulas - no need to t
 ## Project Structure
 
 ```
-BlueNapkin/
-├── BlueNapkinApp.swift       # Main app entry point
-├── AppDelegate.swift         # App lifecycle management
-├── MenuBarController.swift   # Menu bar icon and popover management
-├── ContentView.swift         # Main popover content view
-├── GridView.swift            # Excel-like grid component
-├── CellModel.swift           # Data model for cells
-├── FormulaEngine.swift       # Formula parser and evaluator
-├── Info.plist                # App configuration
-├── BlueNapkin.entitlements   # App permissions
-└── Assets.xcassets/          # App icon and assets
+blue_napkin/
+├── Package.swift             # Swift Package Manager manifest
+├── BlueNapkin/              # Source directory
+│   ├── BlueNapkinApp.swift       # Main app entry point
+│   ├── AppDelegate.swift         # App lifecycle management
+│   ├── MenuBarController.swift   # Menu bar icon and popover management
+│   ├── ContentView.swift         # Main popover content view
+│   ├── GridView.swift            # Excel-like grid component
+│   ├── CellModel.swift           # Data model for cells
+│   ├── FormulaEngine.swift       # Formula parser and evaluator
+│   ├── Info.plist                # App configuration
+│   ├── BlueNapkin.entitlements   # App permissions
+│   └── Assets.xcassets/          # App icon and assets
+├── .gitignore
+└── README.md
 ```
 
 ## Architecture
