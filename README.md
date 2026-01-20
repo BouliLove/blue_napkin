@@ -1,10 +1,49 @@
 # BlueNapkin
 
-A macOS menu bar calculator app with Excel-like formula capabilities, inspired by Numi.
+A calculator with Excel-like formula capabilities, inspired by Numi.
 
-## Features
+**Available in two versions:**
+- 🌐 **Browser Extension** (Chrome, Arc, Edge, Brave) - **Recommended for ease of use!**
+- 🖥️ **macOS App** (Native Swift/SwiftUI)
 
-- **Menu Bar Integration**: Lives in your macOS menu bar for quick access
+---
+
+## 🌐 Browser Extension (Easy Setup - No Build Tools!)
+
+The browser extension is the **easiest way** to use BlueNapkin!
+
+### Quick Start
+
+1. Navigate to the `extension/` folder
+2. Load it in your browser:
+   - Chrome: Open `chrome://extensions/`
+   - Arc: Open `arc://extensions/`
+   - Edge: Open `edge://extensions/`
+3. Enable "Developer mode" (toggle in top-right)
+4. Click "Load unpacked" and select the `extension/` folder
+5. Click the 🧮 icon in your toolbar!
+
+**📖 Full instructions: [extension/README.md](extension/README.md)**
+
+### Browser Extension Benefits
+
+- ✅ **No compilation** - Just load and use!
+- ✅ **Cross-platform** - Works on Windows, Mac, Linux
+- ✅ **Auto-save** - Calculations persist across sessions
+- ✅ **Offline** - No internet required
+- ✅ **Private** - All data stays local
+
+---
+
+## 🖥️ macOS Native App (Advanced Users)
+
+For users who prefer a native macOS menu bar app, the Swift/SwiftUI version is available.
+
+**Note**: Requires Xcode or Swift command-line tools to build.
+
+## Features (Both Versions)
+
+- **Quick Access**: Browser toolbar (extension) or macOS menu bar (app)
 - **Excel-like Grid**: 20x10 spreadsheet-style grid for organizing calculations
 - **Formula Support**: Create formulas using `=` prefix (e.g., `=A1+B2*C3`)
 - **Excel Functions**: Support for SUM, PRODUCT, and AVERAGE with range notation

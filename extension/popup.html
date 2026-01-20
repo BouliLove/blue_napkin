@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlueNapkin</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🧮 BlueNapkin</h1>
+      <button id="clearBtn" class="btn-clear" title="Clear all cells">Clear</button>
+    </div>
+
+    <!-- Tip -->
+    <div class="tip">
+      Tip: Use formulas like =A1+B2 or functions like =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)
+    </div>
+
+    <!-- Grid Container -->
+    <div class="grid-wrapper">
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <!-- Info Bar -->
+    <div class="info-bar">
+      <span id="cellInfo">Click a cell to edit</span>
+      <span id="selectionInfo"></span>
+    </div>
+  </div>
+
+  <script src="formula-engine.js"></script>
+  <script src="grid.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
