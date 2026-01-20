@@ -53,9 +53,21 @@ A quick calculator with Excel-like formulas, accessible from your browser toolba
 ### Basic Usage
 
 1. **Open BlueNapkin**: Click the 🧮 icon in your toolbar
-2. **Enter data**: Double-click any cell to start typing
-3. **Create formulas**: Start with `=` (e.g., `=A1+B2`)
-4. **Press Enter**: Commit your changes
+2. **Select a cell**: Click any cell to select it (blue border appears)
+3. **Start typing**: Just type to start editing - no double-click needed!
+4. **Navigate**: Use arrow keys (↑ ↓ ← →) to move between cells
+5. **Create formulas**: Start with `=` (e.g., `=A1+B2`)
+6. **Commit**: Press `Enter` to save and move down, or `Tab` to save and move right
+
+**Quick tips:**
+- **Single click** = Select cell
+- **Start typing** = Automatically start editing
+- **Arrow keys** = Navigate between cells
+- **Enter** = Save and move down
+- **Tab** = Save and move right
+- **Double-click** = Start editing with cell contents selected
+- **Delete/Backspace** = Clear selected cell
+- **Escape** = Cancel editing
 
 ### Interactive Cell Selection
 
@@ -232,11 +244,23 @@ body {
 
 ## 📝 Keyboard Shortcuts
 
-- **Double-click**: Start editing cell
-- **Enter**: Insert selection reference (when selecting) or commit cell (when done)
+**Navigation:**
+- **Arrow keys (↑ ↓ ← →)**: Navigate between cells
+- **Click**: Select a cell
+- **Double-click**: Start editing with contents selected
+
+**Editing:**
+- **Start typing**: Automatically start editing (replaces cell content)
+- **Enter while selected**: Start editing (keeps cell content)
+- **Enter while editing**: Save and move down
+- **Tab**: Save and move right
 - **Escape**: Cancel editing
-- **Click**: Select single cell (during formula editing)
+- **Delete/Backspace**: Clear selected cell
+
+**Formula building:**
+- **Click cell**: Select single cell (during formula editing)
 - **Click + Drag**: Select range (during formula editing)
+- **Enter while selecting**: Insert cell/range reference into formula
 
 ## 🎨 Browser Compatibility
 

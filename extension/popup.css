@@ -144,6 +144,12 @@ body {
   z-index: 10;
 }
 
+.cell.selected-cell {
+  border: 2px solid #2196F3;
+  box-shadow: 0 0 0 1px #2196F3 inset;
+  z-index: 8;
+}
+
 .cell.selected {
   background: #c8e6c9 !important;
   border: 2px solid #4caf50;

@@ -6,12 +6,14 @@ class Grid {
     this.cells = [];
     this.formulaEngine = new FormulaEngine();
     this.editingCell = null;
+    this.selectedCell = null; // Track selected (focused) cell
     this.selectionStart = null;
     this.selectionEnd = null;
     this.isSelecting = false;
     this.isDragging = false;
 
     this.initializeCells();
+    this.setupKeyboardListeners();
   }
 
   initializeCells() {
@@ -25,6 +27,93 @@ class Grid {
         };
       }
     }
+  }
+
+  setupKeyboardListeners() {
+    document.addEventListener('keydown', (e) => {
+      // Only handle if not currently editing
+      if (this.editingCell) return;
+
+      // Arrow key navigation
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        this.handleArrowKey(e.key);
+        return;
+      }
+
+      // Enter key - start editing selected cell
+      if (e.key === 'Enter' && this.selectedCell) {
+        e.preventDefault();
+        this.startEditing(this.selectedCell.row, this.selectedCell.col);
+        return;
+      }
+
+      // Any printable character - start editing and insert character
+      if (this.selectedCell && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        e.preventDefault();
+        this.startEditing(this.selectedCell.row, this.selectedCell.col, e.key);
+        return;
+      }
+
+      // Backspace or Delete - clear cell
+      if (this.selectedCell && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault();
+        this.cells[this.selectedCell.row][this.selectedCell.col].input = '';
+        this.evaluateCell(this.selectedCell.row, this.selectedCell.col);
+        this.reevaluateAll();
+        this.saveToStorage();
+        return;
+      }
+    });
+  }
+
+  handleArrowKey(key) {
+    if (!this.selectedCell) {
+      // No cell selected, select first cell
+      this.selectCell(0, 0);
+      return;
+    }
+
+    let newRow = this.selectedCell.row;
+    let newCol = this.selectedCell.col;
+
+    switch (key) {
+      case 'ArrowUp':
+        newRow = Math.max(0, newRow - 1);
+        break;
+      case 'ArrowDown':
+        newRow = Math.min(this.rows - 1, newRow + 1);
+        break;
+      case 'ArrowLeft':
+        newCol = Math.max(0, newCol - 1);
+        break;
+      case 'ArrowRight':
+        newCol = Math.min(this.cols - 1, newCol + 1);
+        break;
+    }
+
+    this.selectCell(newRow, newCol);
+  }
+
+  selectCell(row, col) {
+    // Clear previous selection
+    if (this.selectedCell) {
+      const prevCell = this.getCellElement(this.selectedCell.row, this.selectedCell.col);
+      if (prevCell) {
+        prevCell.classList.remove('selected-cell');
+      }
+    }
+
+    // Set new selection
+    this.selectedCell = { row, col };
+    const cellElement = this.getCellElement(row, col);
+    if (cellElement) {
+      cellElement.classList.add('selected-cell');
+      // Scroll into view if needed
+      cellElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+
+    this.updateCellInfo();
   }
 
   render(container) {
@@ -67,6 +156,14 @@ class Grid {
 
       container.appendChild(rowElement);
     }
+
+    // Restore selected cell highlight
+    if (this.selectedCell) {
+      const cellElement = this.getCellElement(this.selectedCell.row, this.selectedCell.col);
+      if (cellElement) {
+        cellElement.classList.add('selected-cell');
+      }
+    }
   }
 
   createCellElement(row, col) {
@@ -84,17 +181,18 @@ class Grid {
       cell.classList.add('error');
     }
 
-    // Double-click to edit
-    cell.addEventListener('dblclick', (e) => {
-      this.startEditing(row, col);
-    });
-
-    // Single click for selection during formula editing
+    // Single click to select cell (or for formula selection)
     cell.addEventListener('click', (e) => {
       this.handleCellClick(row, col);
     });
 
-    // Mouse down for drag selection
+    // Double-click to start editing immediately
+    cell.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      this.startEditing(row, col);
+    });
+
+    // Mouse down for drag selection during formula editing
     cell.addEventListener('mousedown', (e) => {
       if (this.editingCell && this.isFormulaCell(this.editingCell.row, this.editingCell.col)) {
         this.isDragging = true;
@@ -113,48 +211,94 @@ class Grid {
     return cell;
   }
 
-  startEditing(row, col) {
+  startEditing(row, col, initialChar = null) {
     // End any previous editing
     if (this.editingCell) {
       this.endEditing();
     }
 
     this.editingCell = { row, col };
+    this.selectedCell = { row, col }; // Keep cell selected
     this.clearSelection();
 
     const cellElement = this.getCellElement(row, col);
     const input = document.createElement('input');
     input.className = 'cell-input';
-    input.value = this.cells[row][col].input;
+
+    // If initial character provided, start with that, otherwise use cell value
+    if (initialChar !== null) {
+      input.value = initialChar;
+      this.cells[row][col].input = initialChar;
+    } else {
+      input.value = this.cells[row][col].input;
+    }
+
     input.autocomplete = 'off';
 
     cellElement.innerHTML = '';
     cellElement.appendChild(input);
     cellElement.classList.add('focused');
+    cellElement.classList.remove('selected-cell'); // Remove selection highlight during editing
 
     input.focus();
-    input.select();
 
-    // Handle Enter key
+    // Move cursor to end if we started with a character
+    if (initialChar !== null) {
+      input.setSelectionRange(input.value.length, input.value.length);
+    } else {
+      input.select();
+    }
+
+    // Handle keyboard in input
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (this.selectionStart && this.selectionEnd) {
           // Insert selection reference
           const reference = this.getSelectionReference();
-          input.value += reference;
+          const cursorPos = input.selectionStart;
+          const newValue = input.value.slice(0, cursorPos) + reference + input.value.slice(input.selectionEnd);
+          input.value = newValue;
+          this.cells[row][col].input = newValue;
           this.clearSelection();
           input.focus();
+          input.setSelectionRange(cursorPos + reference.length, cursorPos + reference.length);
           this.updateCellInfo();
         } else {
-          // Commit the cell
+          // Commit the cell and move down
           this.cells[row][col].input = input.value;
           this.endEditing();
           this.evaluateCell(row, col);
           this.reevaluateAll();
+
+          // Move to next row
+          if (row < this.rows - 1) {
+            this.selectCell(row + 1, col);
+          }
         }
         e.preventDefault();
       } else if (e.key === 'Escape') {
         this.endEditing();
+      } else if (e.key === 'Tab') {
+        // Tab to next cell
+        e.preventDefault();
+        this.cells[row][col].input = input.value;
+        this.endEditing();
+        this.evaluateCell(row, col);
+        this.reevaluateAll();
+
+        // Move to next column (or wrap to next row)
+        let newCol = col + 1;
+        let newRow = row;
+        if (newCol >= this.cols) {
+          newCol = 0;
+          newRow = row + 1;
+        }
+        if (newRow < this.rows) {
+          this.selectCell(newRow, newCol);
+        }
+      } else if (e.key.startsWith('Arrow')) {
+        // Allow arrow navigation while editing
+        e.stopPropagation();
       }
     });
 
@@ -199,6 +343,11 @@ class Grid {
       cellElement.classList.remove('error');
     }
 
+    // Restore selected cell highlight
+    if (this.selectedCell && this.selectedCell.row === row && this.selectedCell.col === col) {
+      cellElement.classList.add('selected-cell');
+    }
+
     this.editingCell = null;
     this.clearSelection();
     this.updateCellInfo();
@@ -206,11 +355,14 @@ class Grid {
   }
 
   handleCellClick(row, col) {
-    // Only handle clicks when editing a formula in another cell
+    // If editing a formula in another cell, this is for formula cell selection
     if (this.editingCell &&
         this.isFormulaCell(this.editingCell.row, this.editingCell.col) &&
         !(this.editingCell.row === row && this.editingCell.col === col)) {
       this.startSelection(row, col);
+    } else if (!this.editingCell) {
+      // Not editing, just select the cell
+      this.selectCell(row, col);
     }
   }
 
@@ -351,13 +503,19 @@ class Grid {
       const ref = this.cellReference(row, col);
       const input = this.cells[row][col].input;
       document.getElementById('cellInfo').textContent = `${ref}: ${input || 'Empty'}`;
+    } else if (this.selectedCell) {
+      const { row, col } = this.selectedCell;
+      const ref = this.cellReference(row, col);
+      const value = this.cells[row][col].displayValue || 'Empty';
+      document.getElementById('cellInfo').textContent = `${ref}: ${value}`;
     } else {
-      document.getElementById('cellInfo').textContent = 'Click a cell to edit';
+      document.getElementById('cellInfo').textContent = 'Click a cell to select';
     }
   }
 
   clear() {
     this.initializeCells();
+    this.selectedCell = null;
     this.render(document.getElementById('grid'));
     this.saveToStorage();
   }
@@ -378,6 +536,8 @@ class Grid {
         this.cells = result.cells;
         this.reevaluateAll();
       }
+      // Auto-select first cell
+      this.selectCell(0, 0);
     } catch (error) {
       console.error('Failed to load from storage:', error);
     }
