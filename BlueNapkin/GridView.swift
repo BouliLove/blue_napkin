@@ -76,6 +76,8 @@ class GridViewModel: ObservableObject {
     let rows = 20
     let columns = 10
 
+    private static let storageKey = "BlueNapkin.gridData"
+
     init() {
         // Initialize grid
         for row in 0..<rows {
@@ -85,6 +87,7 @@ class GridViewModel: ObservableObject {
             }
             cells.append(rowCells)
         }
+        load()
     }
 
     func getCellValue(row: Int, column: Int) -> String {
@@ -100,6 +103,7 @@ class GridViewModel: ObservableObject {
 
         // Re-evaluate all cells that might depend on this one
         reevaluateAllCells()
+        save()
     }
 
     func reevaluateAllCells() {
@@ -111,6 +115,39 @@ class GridViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Persistence
+
+    func save() {
+        // Store only non-empty cell inputs as [row,col] → input
+        var data: [String: String] = [:]
+        for row in 0..<rows {
+            for col in 0..<columns {
+                let input = cells[row][col].input
+                if !input.isEmpty {
+                    data["\(row),\(col)"] = input
+                }
+            }
+        }
+        UserDefaults.standard.set(data, forKey: Self.storageKey)
+    }
+
+    private func load() {
+        guard let data = UserDefaults.standard.dictionary(forKey: Self.storageKey) as? [String: String] else {
+            return
+        }
+        for (key, input) in data {
+            let parts = key.split(separator: ",")
+            guard parts.count == 2,
+                  let row = Int(parts[0]),
+                  let col = Int(parts[1]),
+                  row >= 0, row < rows, col >= 0, col < columns else {
+                continue
+            }
+            cells[row][col].input = input
+        }
+        reevaluateAllCells()
     }
 }
 
@@ -271,6 +308,7 @@ struct GridView: View {
             }
         }
         viewModel.reevaluateAllCells()
+        viewModel.save()
     }
 
     private func cutCell(row: Int, col: Int) {
