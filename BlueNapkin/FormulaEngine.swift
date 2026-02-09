@@ -196,20 +196,31 @@ class FormulaEngine {
         // Clean up the expression
         let cleanExpression = expression.replacingOccurrences(of: " ", with: "")
 
-        // Use NSExpression for basic math evaluation
-        // This handles +, -, *, /, parentheses, and numbers
-        do {
-            let expr = NSExpression(format: cleanExpression)
-            if let result = expr.expressionValue(with: nil, context: nil) as? NSNumber {
-                let value = result.doubleValue
-                if value.isInfinite {
-                    throw FormulaError.divisionByZero
-                }
-                return value
-            } else {
-                throw FormulaError.invalidFormula
+        // Validate before passing to NSExpression. NSExpression(format:) throws
+        // ObjC exceptions on invalid input that Swift do/catch cannot intercept.
+        let allowed = CharacterSet(charactersIn: "0123456789.+-*/()eE")
+        guard cleanExpression.unicodeScalars.allSatisfy({ allowed.contains($0) }),
+              !cleanExpression.isEmpty,
+              cleanExpression.rangeOfCharacter(from: .decimalDigits) != nil else {
+            throw FormulaError.invalidFormula
+        }
+
+        // Convert integer literals to doubles so NSExpression uses floating-point
+        // division (e.g. 7/2 → 7.0/2.0 = 3.5 instead of integer 3).
+        let floatExpression = cleanExpression.replacingOccurrences(
+            of: "(?<![.\\d])(\\d+)(?![.\\d])",
+            with: "$1.0",
+            options: .regularExpression
+        )
+
+        let expr = NSExpression(format: floatExpression)
+        if let result = expr.expressionValue(with: nil, context: nil) as? NSNumber {
+            let value = result.doubleValue
+            if value.isInfinite {
+                throw FormulaError.divisionByZero
             }
-        } catch {
+            return value
+        } else {
             throw FormulaError.invalidFormula
         }
     }

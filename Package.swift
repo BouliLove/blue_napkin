@@ -20,6 +20,11 @@ let package = Package(
             resources: [
                 .process("Assets.xcassets")
             ]
+        ),
+        .testTarget(
+            name: "BlueNapkinTests",
+            dependencies: ["BlueNapkin"],
+            path: "Tests"
         )
     ]
 )
