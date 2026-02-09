@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:blue_napkin}",
+            "name": "Debug BlueNapkin",
+            "target": "BlueNapkin",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug BlueNapkin"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:blue_napkin}",
+            "name": "Release BlueNapkin",
+            "target": "BlueNapkin",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release BlueNapkin"
+        }
+    ]
+}
