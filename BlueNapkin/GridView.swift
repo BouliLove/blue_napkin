@@ -119,6 +119,8 @@ struct GridView: View {
     @StateObject private var selectionState = SelectionState()
     @FocusState private var focusedCell: UUID?
     @State private var currentEditingCell: (row: Int, col: Int)?
+    @State private var selectedCell: (row: Int, col: Int)?
+    @State private var eventMonitor: Any?
 
     let cellWidth: CGFloat = 80
     let cellHeight: CGFloat = 30
@@ -164,10 +166,12 @@ struct GridView: View {
                                 col: col,
                                 isFocused: focusedCell == viewModel.cells[row][col].id,
                                 isSelected: selectionState.isInSelection(row: row, col: col),
+                                isCursorCell: selectedCell?.row == row && selectedCell?.col == col && currentEditingCell == nil,
                                 isEditingCell: currentEditingCell?.row == row && currentEditingCell?.col == col,
                                 selectionState: selectionState,
                                 onStartEditing: {
                                     currentEditingCell = (row, col)
+                                    selectedCell = (row, col)
                                     selectionState.editingCell = (row, col)
                                     selectionState.clearSelection()
                                 },
@@ -194,18 +198,100 @@ struct GridView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { installEventMonitor() }
+        .onDisappear { removeEventMonitor() }
     }
 
-    private func handleCellClick(row: Int, col: Int) {
-        // Only handle clicks when another cell is being edited with a formula
-        guard let editingCell = currentEditingCell,
-              viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
-              !(editingCell.row == row && editingCell.col == col) else {
-            return
-        }
+    // MARK: - Keyboard Event Monitor (Cmd+C/V/X)
 
-        // Start selection on click
-        selectionState.startSelection(at: row, col: col)
+    private func installEventMonitor() {
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.contains(.command) else { return event }
+
+            // When editing, let the text field handle copy/paste natively
+            if currentEditingCell != nil { return event }
+
+            guard let selected = selectedCell else { return event }
+
+            switch event.charactersIgnoringModifiers {
+            case "c":
+                copyCell(row: selected.row, col: selected.col)
+                return nil
+            case "v":
+                pasteCell(row: selected.row, col: selected.col)
+                return nil
+            case "x":
+                cutCell(row: selected.row, col: selected.col)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeEventMonitor() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+    }
+
+    // MARK: - Clipboard Operations
+
+    private func copyCell(row: Int, col: Int) {
+        let cell = viewModel.cells[row][col]
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(cell.input, forType: .string)
+    }
+
+    private func pasteCell(row: Int, col: Int) {
+        guard let content = NSPasteboard.general.string(forType: .string) else { return }
+
+        // Handle multi-cell paste (TSV: tabs between columns, newlines between rows)
+        let rows = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        if rows.count > 1 || rows.first?.contains("\t") == true {
+            pasteMultiCell(content: rows, startRow: row, startCol: col)
+        } else {
+            let cell = viewModel.cells[row][col]
+            cell.input = content
+            viewModel.updateCell(at: row, column: col)
+        }
+    }
+
+    private func pasteMultiCell(content: [String], startRow: Int, startCol: Int) {
+        for (rowOffset, line) in content.enumerated() {
+            let columns = line.components(separatedBy: "\t")
+            for (colOffset, value) in columns.enumerated() {
+                let targetRow = startRow + rowOffset
+                let targetCol = startCol + colOffset
+                guard targetRow < viewModel.rows, targetCol < viewModel.columns else { continue }
+                let cell = viewModel.cells[targetRow][targetCol]
+                cell.input = value
+            }
+        }
+        viewModel.reevaluateAllCells()
+    }
+
+    private func cutCell(row: Int, col: Int) {
+        copyCell(row: row, col: col)
+        let cell = viewModel.cells[row][col]
+        cell.input = ""
+        viewModel.updateCell(at: row, column: col)
+    }
+
+    // MARK: - Cell Click Handling
+
+    private func handleCellClick(row: Int, col: Int) {
+        if let editingCell = currentEditingCell,
+           viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
+           !(editingCell.row == row && editingCell.col == col) {
+            // Formula editing mode: select cell for reference insertion
+            selectionState.startSelection(at: row, col: col)
+        } else if currentEditingCell == nil {
+            // Not editing: select cell for copy/paste
+            selectedCell = (row, col)
+        }
     }
 
     private func handleCellDrag(row: Int, col: Int) {
@@ -239,6 +325,7 @@ struct CellView: View {
     let col: Int
     let isFocused: Bool
     let isSelected: Bool
+    let isCursorCell: Bool
     let isEditingCell: Bool
     @ObservedObject var selectionState: SelectionState
     let onStartEditing: () -> Void
@@ -312,7 +399,7 @@ struct CellView: View {
     private var backgroundColor: Color {
         if isSelected {
             return Color.green.opacity(0.2)
-        } else if isEditing || isFocused {
+        } else if isEditing || isFocused || isCursorCell {
             return Color.blue.opacity(0.1)
         } else {
             return Color.white
@@ -322,7 +409,7 @@ struct CellView: View {
     private var borderColor: Color {
         if isSelected {
             return Color.green
-        } else if isFocused {
+        } else if isFocused || isCursorCell {
             return Color.blue
         } else {
             return Color.gray.opacity(0.3)
