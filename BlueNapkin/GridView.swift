@@ -208,16 +208,6 @@ struct GridView: View {
                                     get: { viewModel.cells[row][col].input },
                                     set: { viewModel.cells[row][col].input = $0 }
                                 ),
-                                onStartEditing: {
-                                    if let prev = currentEditingCell {
-                                        viewModel.updateCell(at: prev.row, column: prev.col)
-                                    }
-                                    originalEditInput = viewModel.cells[row][col].input
-                                    currentEditingCell = (row, col)
-                                    selectedCell = (row, col)
-                                    selectionState.editingCell = (row, col)
-                                    selectionState.clearSelection()
-                                },
                                 onFinishEditing: { action in
                                     if action != .cancel {
                                         viewModel.updateCell(at: row, column: col)
@@ -347,7 +337,25 @@ struct GridView: View {
                 selectedCell = nil
                 selectionState.clearSelection()
                 return nil
+            case 51, 117: // Delete/Backspace, Forward Delete
+                if let selected = selectedCell {
+                    viewModel.cells[selected.row][selected.col].input = ""
+                    viewModel.updateCell(at: selected.row, column: selected.col)
+                }
+                return nil
             default:
+                // Printable character starts editing (replaces cell content)
+                if let selected = selectedCell,
+                   let chars = event.characters,
+                   let scalar = chars.unicodeScalars.first,
+                   scalar.value >= 32, scalar.value < 0xF700 {
+                    originalEditInput = viewModel.cells[selected.row][selected.col].input
+                    viewModel.cells[selected.row][selected.col].input = chars
+                    currentEditingCell = selected
+                    selectionState.editingCell = selected
+                    selectionState.clearSelection()
+                    return nil
+                }
                 return event
             }
         }
@@ -462,7 +470,6 @@ struct CellView: View, Equatable {
     let isEditing: Bool
     let hasSelectionReference: Bool
     var inputBinding: Binding<String>
-    let onStartEditing: () -> Void
     let onFinishEditing: (EditAction) -> Void
     let onCellClick: (Int, Int) -> Void
     let onInsertReference: () -> Void
@@ -496,10 +503,7 @@ struct CellView: View, Equatable {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .padding(4)
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        onStartEditing()
-                    }
-                    .onTapGesture(count: 1) {
+                    .onTapGesture {
                         onCellClick(row, col)
                     }
             }
@@ -544,6 +548,9 @@ struct CustomTextField: NSViewRepresentable {
         textField.focusRingType = .none
         DispatchQueue.main.async {
             textField.window?.makeFirstResponder(textField)
+            if let editor = textField.currentEditor() {
+                editor.selectedRange = NSRange(location: textField.stringValue.count, length: 0)
+            }
         }
         return textField
     }
