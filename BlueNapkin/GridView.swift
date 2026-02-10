@@ -174,14 +174,14 @@ struct GridView: View {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
                         .frame(width: headerWidth, height: headerHeight)
-                        .border(Color.gray.opacity(0.3))
+                        .border(Color.gray.opacity(0.15))
 
                     ForEach(0..<viewModel.columns, id: \.self) { col in
                         Text(columnName(col))
                             .font(.system(size: 11, weight: .medium))
                             .frame(width: cellWidth, height: headerHeight)
                             .background(Color.gray.opacity(0.2))
-                            .border(Color.gray.opacity(0.3))
+                            .border(Color.gray.opacity(0.15))
                     }
                 }
 
@@ -192,7 +192,7 @@ struct GridView: View {
                             .font(.system(size: 11, weight: .medium))
                             .frame(width: headerWidth, height: cellHeight)
                             .background(Color.gray.opacity(0.2))
-                            .border(Color.gray.opacity(0.3))
+                            .border(Color.gray.opacity(0.15))
 
                         ForEach(0..<viewModel.columns, id: \.self) { col in
                             CellView(
@@ -509,26 +509,28 @@ struct CellView: View, Equatable {
             }
         }
         .background(backgroundColor)
-        .border(borderColor, width: isSelected ? 2 : 1)
+        .border(borderColor, width: (isCursorCell || isEditing) ? 2 : 1)
     }
 
     private var backgroundColor: Color {
         if isSelected {
-            return Color.green.opacity(0.2)
-        } else if isEditing || isCursorCell {
-            return Color.blue.opacity(0.1)
+            return Color.accentColor.opacity(0.08)
+        } else if isCursorCell || isEditing {
+            return Color.accentColor.opacity(0.03)
+        } else if row % 2 == 1 {
+            return Color.primary.opacity(0.02)
         } else {
-            return Color.white
+            return Color(NSColor.controlBackgroundColor)
         }
     }
 
     private var borderColor: Color {
-        if isSelected {
-            return Color.green
-        } else if isCursorCell || isEditing {
-            return Color.blue
+        if isCursorCell || isEditing {
+            return Color.accentColor
+        } else if isSelected {
+            return Color.accentColor.opacity(0.4)
         } else {
-            return Color.gray.opacity(0.3)
+            return Color.gray.opacity(0.15)
         }
     }
 }
