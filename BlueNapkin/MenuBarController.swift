@@ -11,14 +11,49 @@ class MenuBarController: ObservableObject {
     }
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem?.button {
-            // Use a simple text icon for now - you can replace with an image later
-            button.title = "🧮"
+            button.image = makeMenuBarIcon()
             button.action = #selector(togglePopover)
             button.target = self
         }
+    }
+
+    /// Creates a 18x18 template image of a small spreadsheet grid.
+    private func makeMenuBarIcon() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let inset = rect.insetBy(dx: 1, dy: 1)
+            let path = NSBezierPath(roundedRect: inset, xRadius: 2, yRadius: 2)
+            path.lineWidth = 1.2
+            NSColor.black.setStroke()
+            path.stroke()
+
+            // Horizontal lines (2 lines → 3 rows)
+            for i in 1...2 {
+                let y = inset.minY + inset.height * CGFloat(i) / 3
+                let line = NSBezierPath()
+                line.move(to: NSPoint(x: inset.minX, y: y))
+                line.line(to: NSPoint(x: inset.maxX, y: y))
+                line.lineWidth = 0.8
+                line.stroke()
+            }
+
+            // Vertical lines (2 lines → 3 columns)
+            for i in 1...2 {
+                let x = inset.minX + inset.width * CGFloat(i) / 3
+                let line = NSBezierPath()
+                line.move(to: NSPoint(x: x, y: inset.minY))
+                line.line(to: NSPoint(x: x, y: inset.maxY))
+                line.lineWidth = 0.8
+                line.stroke()
+            }
+
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     private func setupPopover() {

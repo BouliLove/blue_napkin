@@ -1,5 +1,12 @@
 import SwiftUI
 
+enum EditAction {
+    case commit
+    case cancel
+    case tabForward
+    case tabBack
+}
+
 // Selection state for tracking cell/range selection during formula editing
 class SelectionState: ObservableObject {
     @Published var isSelecting = false
@@ -48,12 +55,10 @@ class SelectionState: ObservableObject {
         let startRef = cellReference(row: start.row, col: start.col)
         let endRef = cellReference(row: end.row, col: end.col)
 
-        // If single cell, return just the cell reference
         if start.row == end.row && start.col == end.col {
             return startRef
         }
 
-        // Otherwise return range
         return "\(startRef):\(endRef)"
     }
 
@@ -79,7 +84,6 @@ class GridViewModel: ObservableObject {
     private static let storageKey = "BlueNapkin.gridData"
 
     init() {
-        // Initialize grid
         for row in 0..<rows {
             var rowCells: [CellModel] = []
             for col in 0..<columns {
@@ -100,8 +104,6 @@ class GridViewModel: ObservableObject {
     func updateCell(at row: Int, column: Int) {
         let cell = cells[row][column]
         cell.evaluate(using: formulaEngine, getCellValue: getCellValue)
-
-        // Re-evaluate all cells that might depend on this one
         reevaluateAllCells()
         save()
     }
@@ -115,12 +117,12 @@ class GridViewModel: ObservableObject {
                 }
             }
         }
+        objectWillChange.send()
     }
 
     // MARK: - Persistence
 
     func save() {
-        // Store only non-empty cell inputs as [row,col] → input
         var data: [String: String] = [:]
         for row in 0..<rows {
             for col in 0..<columns {
@@ -154,10 +156,10 @@ class GridViewModel: ObservableObject {
 struct GridView: View {
     @StateObject private var viewModel = GridViewModel()
     @StateObject private var selectionState = SelectionState()
-    @FocusState private var focusedCell: UUID?
     @State private var currentEditingCell: (row: Int, col: Int)?
     @State private var selectedCell: (row: Int, col: Int)?
     @State private var eventMonitor: Any?
+    @State private var originalEditInput: String = ""
 
     let cellWidth: CGFloat = 80
     let cellHeight: CGFloat = 30
@@ -166,16 +168,14 @@ struct GridView: View {
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0, pinnedViews: []) {
                 // Column headers
                 HStack(spacing: 0) {
-                    // Empty corner cell
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
                         .frame(width: headerWidth, height: headerHeight)
                         .border(Color.gray.opacity(0.3))
 
-                    // Column letters
                     ForEach(0..<viewModel.columns, id: \.self) { col in
                         Text(columnName(col))
                             .font(.system(size: 11, weight: .medium))
@@ -188,46 +188,77 @@ struct GridView: View {
                 // Rows
                 ForEach(0..<viewModel.rows, id: \.self) { row in
                     HStack(spacing: 0) {
-                        // Row number
                         Text("\(row + 1)")
                             .font(.system(size: 11, weight: .medium))
                             .frame(width: headerWidth, height: cellHeight)
                             .background(Color.gray.opacity(0.2))
                             .border(Color.gray.opacity(0.3))
 
-                        // Cells
                         ForEach(0..<viewModel.columns, id: \.self) { col in
                             CellView(
-                                cell: viewModel.cells[row][col],
+                                displayValue: viewModel.cells[row][col].displayValue,
+                                hasError: viewModel.cells[row][col].hasError,
                                 row: row,
                                 col: col,
-                                isFocused: focusedCell == viewModel.cells[row][col].id,
                                 isSelected: selectionState.isInSelection(row: row, col: col),
                                 isCursorCell: selectedCell?.row == row && selectedCell?.col == col && currentEditingCell == nil,
-                                isEditingCell: currentEditingCell?.row == row && currentEditingCell?.col == col,
-                                selectionState: selectionState,
+                                isEditing: currentEditingCell?.row == row && currentEditingCell?.col == col,
+                                hasSelectionReference: selectionState.selectionStart != nil,
+                                inputBinding: Binding(
+                                    get: { viewModel.cells[row][col].input },
+                                    set: { viewModel.cells[row][col].input = $0 }
+                                ),
                                 onStartEditing: {
+                                    if let prev = currentEditingCell {
+                                        viewModel.updateCell(at: prev.row, column: prev.col)
+                                    }
+                                    originalEditInput = viewModel.cells[row][col].input
                                     currentEditingCell = (row, col)
                                     selectedCell = (row, col)
                                     selectionState.editingCell = (row, col)
                                     selectionState.clearSelection()
                                 },
-                                onEndEditing: {
+                                onFinishEditing: { action in
+                                    if action != .cancel {
+                                        viewModel.updateCell(at: row, column: col)
+                                    } else {
+                                        viewModel.cells[row][col].input = originalEditInput
+                                    }
                                     currentEditingCell = nil
                                     selectionState.editingCell = nil
                                     selectionState.clearSelection()
+                                    switch action {
+                                    case .commit:
+                                        if row + 1 < viewModel.rows {
+                                            selectedCell = (row + 1, col)
+                                        }
+                                    case .cancel:
+                                        break
+                                    case .tabForward:
+                                        if col + 1 < viewModel.columns {
+                                            selectedCell = (row, col + 1)
+                                        } else if row + 1 < viewModel.rows {
+                                            selectedCell = (row + 1, 0)
+                                        }
+                                    case .tabBack:
+                                        if col - 1 >= 0 {
+                                            selectedCell = (row, col - 1)
+                                        } else if row - 1 >= 0 {
+                                            selectedCell = (row - 1, viewModel.columns - 1)
+                                        }
+                                    }
                                 },
                                 onCellClick: { clickedRow, clickedCol in
                                     handleCellClick(row: clickedRow, col: clickedCol)
                                 },
-                                onCellDrag: { draggedRow, draggedCol in
-                                    handleCellDrag(row: draggedRow, col: draggedCol)
-                                },
-                                onCommit: {
-                                    viewModel.updateCell(at: row, column: col)
+                                onInsertReference: {
+                                    if let ref = selectionState.getSelectionReference() {
+                                        viewModel.cells[row][col].input += ref
+                                        selectionState.clearSelection()
+                                    }
                                 }
                             )
-                            .focused($focusedCell, equals: viewModel.cells[row][col].id)
+                            .equatable()
                             .frame(width: cellWidth, height: cellHeight)
                         }
                     }
@@ -239,26 +270,82 @@ struct GridView: View {
         .onDisappear { removeEventMonitor() }
     }
 
-    // MARK: - Keyboard Event Monitor (Cmd+C/V/X)
+    // MARK: - Keyboard Event Monitor
 
     private func installEventMonitor() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.modifierFlags.contains(.command) else { return event }
+            // While editing, let the text field handle all keys
+            if currentEditingCell != nil {
+                return event
+            }
 
-            // When editing, let the text field handle copy/paste natively
-            if currentEditingCell != nil { return event }
+            let shift = event.modifierFlags.contains(.shift)
+            let cmd = event.modifierFlags.contains(.command)
 
-            guard let selected = selectedCell else { return event }
+            // Cmd+C/V/X
+            if cmd {
+                guard let selected = selectedCell else { return event }
+                switch event.charactersIgnoringModifiers {
+                case "c":
+                    copyCell(row: selected.row, col: selected.col)
+                    return nil
+                case "v":
+                    pasteCell(row: selected.row, col: selected.col)
+                    return nil
+                case "x":
+                    cutCell(row: selected.row, col: selected.col)
+                    return nil
+                default:
+                    return event
+                }
+            }
 
-            switch event.charactersIgnoringModifiers {
-            case "c":
-                copyCell(row: selected.row, col: selected.col)
+            switch event.keyCode {
+            case 126: // Up
+                if shift { extendSelection(dr: -1, dc: 0) }
+                else { moveSelection(dr: -1, dc: 0) }
                 return nil
-            case "v":
-                pasteCell(row: selected.row, col: selected.col)
+            case 125: // Down
+                if shift { extendSelection(dr: 1, dc: 0) }
+                else { moveSelection(dr: 1, dc: 0) }
                 return nil
-            case "x":
-                cutCell(row: selected.row, col: selected.col)
+            case 123: // Left
+                if shift { extendSelection(dr: 0, dc: -1) }
+                else { moveSelection(dr: 0, dc: -1) }
+                return nil
+            case 124: // Right
+                if shift { extendSelection(dr: 0, dc: 1) }
+                else { moveSelection(dr: 0, dc: 1) }
+                return nil
+            case 36: // Return/Enter
+                if let selected = selectedCell {
+                    originalEditInput = viewModel.cells[selected.row][selected.col].input
+                    currentEditingCell = selected
+                    selectionState.editingCell = selected
+                    selectionState.clearSelection()
+                    return nil
+                }
+                return event
+            case 48: // Tab
+                let current = selectedCell ?? (row: 0, col: 0)
+                if shift {
+                    if current.col - 1 >= 0 {
+                        selectedCell = (current.row, current.col - 1)
+                    } else if current.row - 1 >= 0 {
+                        selectedCell = (current.row - 1, viewModel.columns - 1)
+                    }
+                } else {
+                    if current.col + 1 < viewModel.columns {
+                        selectedCell = (current.row, current.col + 1)
+                    } else if current.row + 1 < viewModel.rows {
+                        selectedCell = (current.row + 1, 0)
+                    }
+                }
+                selectionState.clearSelection()
+                return nil
+            case 53: // Escape
+                selectedCell = nil
+                selectionState.clearSelection()
                 return nil
             default:
                 return event
@@ -276,22 +363,18 @@ struct GridView: View {
     // MARK: - Clipboard Operations
 
     private func copyCell(row: Int, col: Int) {
-        let cell = viewModel.cells[row][col]
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(cell.input, forType: .string)
+        pasteboard.setString(viewModel.cells[row][col].input, forType: .string)
     }
 
     private func pasteCell(row: Int, col: Int) {
         guard let content = NSPasteboard.general.string(forType: .string) else { return }
-
-        // Handle multi-cell paste (TSV: tabs between columns, newlines between rows)
         let rows = content.components(separatedBy: "\n").filter { !$0.isEmpty }
         if rows.count > 1 || rows.first?.contains("\t") == true {
             pasteMultiCell(content: rows, startRow: row, startCol: col)
         } else {
-            let cell = viewModel.cells[row][col]
-            cell.input = content
+            viewModel.cells[row][col].input = content
             viewModel.updateCell(at: row, column: col)
         }
     }
@@ -303,8 +386,7 @@ struct GridView: View {
                 let targetRow = startRow + rowOffset
                 let targetCol = startCol + colOffset
                 guard targetRow < viewModel.rows, targetCol < viewModel.columns else { continue }
-                let cell = viewModel.cells[targetRow][targetCol]
-                cell.input = value
+                viewModel.cells[targetRow][targetCol].input = value
             }
         }
         viewModel.reevaluateAllCells()
@@ -313,36 +395,49 @@ struct GridView: View {
 
     private func cutCell(row: Int, col: Int) {
         copyCell(row: row, col: col)
-        let cell = viewModel.cells[row][col]
-        cell.input = ""
+        viewModel.cells[row][col].input = ""
         viewModel.updateCell(at: row, column: col)
     }
 
     // MARK: - Cell Click Handling
 
     private func handleCellClick(row: Int, col: Int) {
-        if let editingCell = currentEditingCell,
-           viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
-           !(editingCell.row == row && editingCell.col == col) {
-            // Formula editing mode: select cell for reference insertion
-            selectionState.startSelection(at: row, col: col)
-        } else if currentEditingCell == nil {
-            // Not editing: select cell for copy/paste
+        if let editingCell = currentEditingCell {
+            if viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
+               !(editingCell.row == row && editingCell.col == col) {
+                selectionState.startSelection(at: row, col: col)
+            } else if !(editingCell.row == row && editingCell.col == col) {
+                viewModel.updateCell(at: editingCell.row, column: editingCell.col)
+                currentEditingCell = nil
+                selectionState.editingCell = nil
+                selectionState.clearSelection()
+                selectedCell = (row, col)
+            }
+        } else {
             selectedCell = (row, col)
+            selectionState.clearSelection()
         }
     }
 
-    private func handleCellDrag(row: Int, col: Int) {
-        // Only handle drags when another cell is being edited with a formula
-        guard let editingCell = currentEditingCell,
-              viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
-              !(editingCell.row == row && editingCell.col == col),
-              selectionState.isSelecting else {
-            return
-        }
+    // MARK: - Keyboard Navigation
 
-        // Update selection on drag
-        selectionState.updateSelection(to: row, col: col)
+    private func moveSelection(dr: Int, dc: Int) {
+        let current = selectedCell ?? (row: 0, col: 0)
+        let newRow = max(0, min(viewModel.rows - 1, current.row + dr))
+        let newCol = max(0, min(viewModel.columns - 1, current.col + dc))
+        selectedCell = (newRow, newCol)
+        selectionState.clearSelection()
+    }
+
+    private func extendSelection(dr: Int, dc: Int) {
+        let anchor = selectedCell ?? (row: 0, col: 0)
+        if selectionState.selectionStart == nil {
+            selectionState.startSelection(at: anchor.row, col: anchor.col)
+        }
+        guard let end = selectionState.selectionEnd else { return }
+        let newRow = max(0, min(viewModel.rows - 1, end.row + dr))
+        let newCol = max(0, min(viewModel.columns - 1, end.col + dc))
+        selectionState.updateSelection(to: newRow, col: newCol)
     }
 
     private func columnName(_ index: Int) -> String {
@@ -357,87 +452,66 @@ struct GridView: View {
     }
 }
 
-struct CellView: View {
-    @ObservedObject var cell: CellModel
+struct CellView: View, Equatable {
+    let displayValue: String
+    let hasError: Bool
     let row: Int
     let col: Int
-    let isFocused: Bool
     let isSelected: Bool
     let isCursorCell: Bool
-    let isEditingCell: Bool
-    @ObservedObject var selectionState: SelectionState
+    let isEditing: Bool
+    let hasSelectionReference: Bool
+    var inputBinding: Binding<String>
     let onStartEditing: () -> Void
-    let onEndEditing: () -> Void
+    let onFinishEditing: (EditAction) -> Void
     let onCellClick: (Int, Int) -> Void
-    let onCellDrag: (Int, Int) -> Void
-    let onCommit: () -> Void
+    let onInsertReference: () -> Void
 
-    @State private var isEditing = false
-    @FocusState private var textFieldFocused: Bool
+    static func == (lhs: CellView, rhs: CellView) -> Bool {
+        lhs.displayValue == rhs.displayValue &&
+        lhs.hasError == rhs.hasError &&
+        lhs.row == rhs.row &&
+        lhs.col == rhs.col &&
+        lhs.isSelected == rhs.isSelected &&
+        lhs.isCursorCell == rhs.isCursorCell &&
+        lhs.isEditing == rhs.isEditing &&
+        lhs.hasSelectionReference == rhs.hasSelectionReference
+    }
 
     var body: some View {
         ZStack {
             if isEditing {
                 CustomTextField(
-                    text: $cell.input,
-                    onCommit: {
-                        isEditing = false
-                        onEndEditing()
-                        onCommit()
-                    },
-                    onInsertReference: { reference in
-                        // Insert the selected reference at cursor position
-                        cell.input += reference
-                        selectionState.clearSelection()
-                    },
-                    selectionState: selectionState
+                    text: inputBinding,
+                    onAction: { action in onFinishEditing(action) },
+                    onInsertReference: onInsertReference,
+                    hasSelectionReference: hasSelectionReference
                 )
                 .font(.system(size: 12))
                 .padding(4)
             } else {
-                Text(cell.displayValue)
+                Text(displayValue)
                     .font(.system(size: 12))
-                    .foregroundColor(cell.hasError ? .red : .primary)
+                    .foregroundColor(hasError ? .red : .primary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .padding(4)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
-                        isEditing = true
                         onStartEditing()
                     }
                     .onTapGesture(count: 1) {
-                        // Handle single click for selection during formula editing
                         onCellClick(row, col)
                     }
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                // Track drag over this cell
-                                if selectionState.isSelecting {
-                                    onCellDrag(row, col)
-                                }
-                            }
-                            .onEnded { _ in
-                                // End selection on drag end
-                                selectionState.endSelection()
-                            }
-                    )
             }
         }
         .background(backgroundColor)
         .border(borderColor, width: isSelected ? 2 : 1)
-        .onChange(of: isFocused) { newValue in
-            if !newValue {
-                isEditing = false
-                onEndEditing()
-            }
-        }
     }
 
     private var backgroundColor: Color {
         if isSelected {
             return Color.green.opacity(0.2)
-        } else if isEditing || isFocused || isCursorCell {
+        } else if isEditing || isCursorCell {
             return Color.blue.opacity(0.1)
         } else {
             return Color.white
@@ -447,7 +521,7 @@ struct CellView: View {
     private var borderColor: Color {
         if isSelected {
             return Color.green
-        } else if isFocused || isCursorCell {
+        } else if isCursorCell || isEditing {
             return Color.blue
         } else {
             return Color.gray.opacity(0.3)
@@ -455,12 +529,12 @@ struct CellView: View {
     }
 }
 
-// Custom TextField that handles Enter key for inserting cell references
+// Custom TextField that handles Enter, Escape, and Tab keys
 struct CustomTextField: NSViewRepresentable {
     @Binding var text: String
-    let onCommit: () -> Void
-    let onInsertReference: (String) -> Void
-    @ObservedObject var selectionState: SelectionState
+    let onAction: (EditAction) -> Void
+    let onInsertReference: () -> Void
+    let hasSelectionReference: Bool
 
     func makeNSView(context: Context) -> NSTextField {
         let textField = NSTextField()
@@ -468,11 +542,16 @@ struct CustomTextField: NSViewRepresentable {
         textField.isBordered = false
         textField.backgroundColor = .clear
         textField.focusRingType = .none
+        DispatchQueue.main.async {
+            textField.window?.makeFirstResponder(textField)
+        }
         return textField
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
-        nsView.stringValue = text
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
         context.coordinator.parent = self
     }
 
@@ -493,17 +572,25 @@ struct CustomTextField: NSViewRepresentable {
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-            // Handle Enter key to insert cell reference
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                if let reference = parent.selectionState.getSelectionReference() {
-                    parent.onInsertReference(reference)
-                    parent.selectionState.clearSelection()
-                    return true
+                if parent.hasSelectionReference {
+                    parent.onInsertReference()
                 } else {
-                    // No selection, commit the cell
-                    parent.onCommit()
-                    return true
+                    parent.onAction(.commit)
                 }
+                return true
+            }
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                parent.onAction(.cancel)
+                return true
+            }
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                parent.onAction(.tabForward)
+                return true
+            }
+            if commandSelector == #selector(NSResponder.insertBacktab(_:)) {
+                parent.onAction(.tabBack)
+                return true
             }
             return false
         }
