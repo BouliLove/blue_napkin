@@ -16,7 +16,7 @@ let package = Package(
         .executableTarget(
             name: "BlueNapkin",
             path: "BlueNapkin",
-            exclude: ["Info.plist", "Assets.xcassets"],
+            exclude: ["Info.plist", "Assets.xcassets", "AppIcon.icns"],
             resources: [
                 .process("Assets.xcassets")
             ]

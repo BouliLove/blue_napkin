@@ -1,6 +1,9 @@
 # BlueNapkin
 
+When you want to quickly work something with formulas, but don't want to open up a new GSheet or Excel file: meet BlueNapkin.
 A fast, lightweight macOS menu bar spreadsheet with Excel-like formula support.
+
+I have been using Numi, a calculator living in my navbar since 2015, and it inspired me the same thing, but for table calculations.
 
 ## Features
 
@@ -12,6 +15,7 @@ A fast, lightweight macOS menu bar spreadsheet with Excel-like formula support.
 - **Formula bar** — shows the raw formula of the selected cell at the bottom
 - **Copy/paste** — Cmd+C/V/X, with multi-cell TSV paste support
 - **Data persistence** — cell data saved to UserDefaults, survives app restarts
+- **Launch at login** — auto-starts with your Mac, like Numi
 - **Performance optimized** — Equatable views, value-type props, only changed cells re-render
 - **Dark mode** — follows system appearance
 
@@ -20,7 +24,17 @@ A fast, lightweight macOS menu bar spreadsheet with Excel-like formula support.
 - macOS 13.0 (Ventura) or later
 - Swift 5.9+
 
-## Build & Run
+## Install
+
+```bash
+./scripts/bundle.sh
+cp -r .build/BlueNapkin.app /Applications/
+open /Applications/BlueNapkin.app
+```
+
+This builds a release binary, packages it as a `.app` bundle, and copies it to Applications. The app auto-registers as a login item on first launch — you can manage it in **System Settings > General > Login Items**.
+
+## Development
 
 ```bash
 swift build && .build/debug/BlueNapkin &
@@ -38,7 +52,7 @@ pkill -f BlueNapkin; swift build && .build/debug/BlueNapkin &
 swift test
 ```
 
-54 tests covering the formula engine, cell references, and cell model.
+47 tests covering the formula engine, cell references, and cell model.
 
 ## Keyboard Shortcuts
 
@@ -86,6 +100,8 @@ blue_napkin/
 │   └── FormulaEngine.swift    # Formula parser/evaluator
 ├── Tests/
 │   └── FormulaEngineTests.swift
+├── scripts/
+│   └── bundle.sh             # Packages .app bundle for /Applications
 └── README.md
 ```
 
