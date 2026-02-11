@@ -369,41 +369,6 @@ struct ErrorTests {
 
 @Suite("CellModel")
 struct CellModelTests {
-    @Test func columnNameA() {
-        let cell = CellModel(row: 0, column: 0)
-        #expect(cell.columnName == "A")
-    }
-
-    @Test func columnNameB() {
-        let cell = CellModel(row: 0, column: 1)
-        #expect(cell.columnName == "B")
-    }
-
-    @Test func columnNameZ() {
-        let cell = CellModel(row: 0, column: 25)
-        #expect(cell.columnName == "Z")
-    }
-
-    @Test func columnNameAA() {
-        let cell = CellModel(row: 0, column: 26)
-        #expect(cell.columnName == "AA")
-    }
-
-    @Test func cellReferenceA1() {
-        let cell = CellModel(row: 0, column: 0)
-        #expect(cell.cellReference == "A1")
-    }
-
-    @Test func cellReferenceB5() {
-        let cell = CellModel(row: 4, column: 1)
-        #expect(cell.cellReference == "B5")
-    }
-
-    @Test func cellReferenceJ20() {
-        let cell = CellModel(row: 19, column: 9)
-        #expect(cell.cellReference == "J20")
-    }
-
     @Test func plainValue() {
         let cell = CellModel(row: 0, column: 0)
         let engine = FormulaEngine()

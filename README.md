@@ -1,183 +1,94 @@
 # BlueNapkin
 
-A macOS menu bar calculator with Excel-like formula capabilities, inspired by [Numi](https://numi.app/).
+A fast, lightweight macOS menu bar spreadsheet with Excel-like formula support.
 
 ## Features
 
-- **Quick Access**: Lives in your macOS menu bar as a 🧮 icon
-- **Excel-like Grid**: 20x10 spreadsheet-style grid for organizing calculations
-- **Formula Support**: Create formulas using `=` prefix (e.g., `=A1+B2*C3`)
-- **Excel Functions**: SUM, PRODUCT, and AVERAGE with range notation
-- **Interactive Cell Selection**: Click or drag to select cells/ranges while building formulas
-- **Cell References**: Standard Excel notation (A1, B2, etc.)
-- **Auto-calculation**: Formulas automatically recalculate when dependencies change
-- **Lightweight**: Native SwiftUI app with minimal resource usage
+- **Menu bar app** — lives in your macOS menu bar, opens as a popover
+- **Excel-like editing** — click to select, type to replace, Enter to edit existing content
+- **Keyboard navigation** — arrow keys, Tab, Shift+Arrow for range selection, Cmd+A to select all
+- **Formula engine** — `=A1+B2*C3`, `=SUM(A1:A10)`, `=AVERAGE(B1:B5)`, `=PRODUCT(C1:C3)`
+- **Formula reference selection** — while typing a formula, use arrow keys or click cells to insert references
+- **Formula bar** — shows the raw formula of the selected cell at the bottom
+- **Copy/paste** — Cmd+C/V/X, with multi-cell TSV paste support
+- **Data persistence** — cell data saved to UserDefaults, survives app restarts
+- **Performance optimized** — Equatable views, value-type props, only changed cells re-render
+- **Dark mode** — follows system appearance
 
 ## Requirements
 
 - macOS 13.0 (Ventura) or later
-- Swift 5.9 or later
-- Xcode 14.0+ (for building) OR Swift command-line tools
+- Swift 5.9+
 
-## Installation
-
-### Option 1: Build with Xcode (Easiest)
-
-1. Clone this repository:
-   ```bash
-   git clone <repository-url>
-   cd blue_napkin
-   ```
-
-2. Open in Xcode:
-   ```bash
-   open Package.swift
-   ```
-
-3. Build and run: `Cmd + R`
-
-### Option 2: Build from Command Line
+## Build & Run
 
 ```bash
-swift build -c release
-open .build/release/BlueNapkin.app
+swift build && .build/debug/BlueNapkin &
 ```
 
-### Option 3: Use with VSCode
+To rebuild after changes:
 
-1. Install the `Swift` extension by Swift Server Work Group
-2. Open the project: `code .`
-3. Build and run:
-   ```bash
-   swift build -c release
-   open .build/release/BlueNapkin.app
-   ```
+```bash
+pkill -f BlueNapkin; swift build && .build/debug/BlueNapkin &
+```
 
-The app will appear in your menu bar as a 🧮 icon.
+## Run Tests
 
-## Usage
+```bash
+swift test
+```
 
-### Basic Usage
+54 tests covering the formula engine, cell references, and cell model.
 
-1. Click the 🧮 icon in your menu bar to open BlueNapkin
-2. Double-click any cell to start editing
-3. Enter a value or formula
-4. Press `Enter` to commit the value
+## Keyboard Shortcuts
 
-### Interactive Cell Selection
+| Shortcut | Action |
+|----------|--------|
+| Arrow keys | Move selection |
+| Shift+Arrow | Extend selection range |
+| Enter | Start editing selected cell |
+| Type any character | Start editing (replaces content) |
+| Tab / Shift+Tab | Move to next/previous cell |
+| Escape | Cancel editing / deselect |
+| Delete | Clear selected cell(s) |
+| Cmd+A | Select all cells |
+| Cmd+C / Cmd+V / Cmd+X | Copy / Paste / Cut |
 
-1. **Start a formula**: Double-click a cell and type `=`
-2. **Click to select**: Click any other cell to insert its reference (highlighted in green)
-3. **Click and drag**: Drag across cells to select a range
-4. **Continue editing**: Type operators or functions, then select more cells
+While editing a formula (starts with `=`):
 
-**Visual feedback:**
-- Blue border: Currently editing cell
-- Green highlight: Selected cells/range during formula editing
+| Shortcut | Action |
+|----------|--------|
+| Arrow keys | Select a cell reference |
+| Shift+Arrow | Extend to a range reference |
+| Click another cell | Insert cell reference |
 
-### Formula Syntax
+## Formula Syntax
 
-- **Basic math**: `=5+3`, `=10*2`, `=(5+3)*2`
+- **Math**: `=5+3`, `=10*2`, `=(5+3)*2`
 - **Cell references**: `=A1+B1`, `=A1*2`
-- **Operators**: `+`, `-`, `*`, `/`, `()`
-- **SUM**: `=SUM(A1:A10)`, `=SUM(A1,B2,C3)`
-- **PRODUCT**: `=PRODUCT(A1:A5)`
+- **SUM**: `=SUM(A1:A10)` or `=SUM(A1,B2,C3)`
 - **AVERAGE**: `=AVERAGE(A1:A10)`
-- **Combined**: `=SUM(A1:A10)*2`, `=(SUM(A1:A5)+SUM(B1:B5))/2`
-
-### Examples
-
-| Cell | Input | Result | Description |
-|------|-------|--------|-------------|
-| A1 | `100` | 100 | Price |
-| A2 | `0.08` | 0.08 | Tax rate |
-| A3 | `=A1*A2` | 8 | Tax amount |
-| A4 | `=A1+A3` | 108 | Total |
-| A6 | `=SUM(A1:A5)` | 216.08 | Sum of range |
-| A7 | `=AVERAGE(A1:A4)` | 54.02 | Average |
+- **PRODUCT**: `=PRODUCT(A1:A5)`
+- **Combined**: `=SUM(A1:A5)*2`, `=(SUM(A1:A5)+SUM(B1:B5))/2`
 
 ## Project Structure
 
 ```
 blue_napkin/
-├── Package.swift                # Swift Package Manager manifest
-├── BlueNapkin/                  # Source directory
-│   ├── BlueNapkinApp.swift          # Main app entry point
-│   ├── AppDelegate.swift            # App lifecycle management
-│   ├── MenuBarController.swift      # Menu bar icon and popover
-│   ├── ContentView.swift            # Main popover content view
-│   ├── GridView.swift               # Excel-like grid component
-│   ├── CellModel.swift              # Cell data model
-│   ├── FormulaEngine.swift          # Formula parser and evaluator
-│   ├── Info.plist                   # App configuration
-│   ├── BlueNapkin.entitlements      # App permissions
-│   └── Assets.xcassets/             # App icon and assets
-├── .gitignore
+├── Package.swift              # SPM manifest
+├── BlueNapkin/
+│   ├── BlueNapkinApp.swift    # App entry point
+│   ├── AppDelegate.swift      # App lifecycle
+│   ├── MenuBarController.swift # Menu bar icon and popover
+│   ├── ContentView.swift      # Main content wrapper
+│   ├── GridView.swift         # Grid, cell views, keyboard handling
+│   ├── CellModel.swift        # Cell data model
+│   └── FormulaEngine.swift    # Formula parser/evaluator
+├── Tests/
+│   └── FormulaEngineTests.swift
 └── README.md
 ```
 
-## Architecture
-
-1. **MenuBarController**: Manages the menu bar status item and popover window
-2. **GridView**: Displays the Excel-like grid interface
-3. **CellModel**: Represents individual cells with input, display value, and error state
-4. **FormulaEngine**: Parses and evaluates formulas with cell references (NSExpression-based)
-
-## Customization
-
-### Grid Size
-
-Edit `GridViewModel` in `GridView.swift`:
-```swift
-let rows = 20    // Change number of rows
-let columns = 10 // Change number of columns
-```
-
-### Menu Bar Icon
-
-Edit `MenuBarController.swift`:
-```swift
-button.title = "🧮"  // Change to your preferred icon
-```
-
-## Known Limitations
-
-- Limited Excel function support (currently: SUM, PRODUCT, AVERAGE)
-- No data persistence (calculations are lost when app closes)
-- No copy/paste functionality
-- Limited to 20 rows x 10 columns
-
-## Future Enhancements
-
-- [x] Basic Excel functions (SUM, PRODUCT, AVERAGE)
-- [ ] More functions (MIN, MAX, COUNT, IF, ROUND, etc.)
-- [ ] Data persistence (save/load calculations)
-- [ ] Copy/paste support
-- [ ] Cell formatting (colors, alignment, number formats)
-- [ ] Multiple sheets/tabs
-- [ ] Export to CSV
-- [ ] Undo/redo
-- [ ] Dark mode support
-
-## Troubleshooting
-
-### App doesn't appear in menu bar
-
-- Make sure the app is running (check Activity Monitor)
-- The app has `LSUIElement` set to `true`, so it won't appear in the Dock
-- Look for the 🧮 icon in your menu bar
-
-### Formulas show #ERROR
-
-- Check formula syntax (must start with `=`)
-- Ensure cell references are valid (e.g., A1-J20)
-- Avoid circular references (A1 = B1, B1 = A1)
-- Check for division by zero
-
 ## License
 
-This project is open source and available under the MIT License.
-
-## Credits
-
-Inspired by [Numi](https://numi.app/) - a beautiful calculator app for macOS.
+MIT

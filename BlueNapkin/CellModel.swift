@@ -37,19 +37,4 @@ class CellModel: ObservableObject, Identifiable {
             displayValue = input
         }
     }
-
-    var columnName: String {
-        var name = ""
-        var col = column
-        while col >= 0 {
-            name = String(UnicodeScalar(65 + (col % 26))!) + name
-            col = col / 26 - 1
-            if col < 0 { break }
-        }
-        return name
-    }
-
-    var cellReference: String {
-        return "\(columnName)\(row + 1)"
-    }
 }

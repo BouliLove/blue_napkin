@@ -12,8 +12,6 @@ class SelectionState: ObservableObject {
     @Published var isSelecting = false
     @Published var selectionStart: (row: Int, col: Int)?
     @Published var selectionEnd: (row: Int, col: Int)?
-    @Published var editingCell: (row: Int, col: Int)?
-
     func startSelection(at row: Int, col: Int) {
         selectionStart = (row, col)
         selectionEnd = (row, col)
@@ -22,10 +20,6 @@ class SelectionState: ObservableObject {
 
     func updateSelection(to row: Int, col: Int) {
         selectionEnd = (row, col)
-    }
-
-    func endSelection() {
-        isSelecting = false
     }
 
     func clearSelection() {
@@ -168,7 +162,12 @@ struct GridView: View {
     let headerWidth: CGFloat = 40
     let headerHeight: CGFloat = 30
 
+    private var activeCell: (row: Int, col: Int)? {
+        currentEditingCell ?? selectedCell
+    }
+
     var body: some View {
+        VStack(spacing: 0) {
         ScrollView([.horizontal, .vertical]) {
             LazyVStack(spacing: 0, pinnedViews: []) {
                 // Column headers
@@ -205,6 +204,7 @@ struct GridView: View {
                                 isSelected: selectionState.isInSelection(row: row, col: col),
                                 isCursorCell: selectedCell?.row == row && selectedCell?.col == col && currentEditingCell == nil,
                                 isEditing: currentEditingCell?.row == row && currentEditingCell?.col == col,
+                                inputValue: viewModel.cells[row][col].input,
                                 inputBinding: Binding(
                                     get: { viewModel.cells[row][col].input },
                                     set: { viewModel.cells[row][col].input = $0 }
@@ -216,7 +216,7 @@ struct GridView: View {
                                         viewModel.cells[row][col].input = originalEditInput
                                     }
                                     currentEditingCell = nil
-                                    selectionState.editingCell = nil
+
                                     selectionState.clearSelection()
                                     formulaRefStart = nil
                                     formulaRefLength = 0
@@ -253,6 +253,30 @@ struct GridView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            // Formula bar
+            HStack(spacing: 8) {
+                if let cell = activeCell,
+                   !viewModel.cells[cell.row][cell.col].input.isEmpty {
+                    Text("\(columnName(cell.col))\(cell.row + 1)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Text(viewModel.cells[cell.row][cell.col].input)
+                        .font(.system(size: 11, design: .monospaced))
+                        .lineLimit(1)
+                } else {
+                    Text("Tip: =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
         .onAppear { installEventMonitor() }
         .onDisappear { removeEventMonitor() }
     }
@@ -285,8 +309,14 @@ struct GridView: View {
             let shift = event.modifierFlags.contains(.shift)
             let cmd = event.modifierFlags.contains(.command)
 
-            // Cmd+C/V/X
+            // Cmd shortcuts
             if cmd {
+                if event.charactersIgnoringModifiers == "a" {
+                    selectedCell = (0, 0)
+                    selectionState.startSelection(at: 0, col: 0)
+                    selectionState.updateSelection(to: viewModel.rows - 1, col: viewModel.columns - 1)
+                    return nil
+                }
                 guard let selected = selectedCell else { return event }
                 switch event.charactersIgnoringModifiers {
                 case "c":
@@ -324,7 +354,7 @@ struct GridView: View {
                 if let selected = selectedCell {
                     originalEditInput = viewModel.cells[selected.row][selected.col].input
                     currentEditingCell = selected
-                    selectionState.editingCell = selected
+
                     selectionState.clearSelection()
                     return nil
                 }
@@ -351,7 +381,19 @@ struct GridView: View {
                 selectionState.clearSelection()
                 return nil
             case 51, 117: // Delete/Backspace, Forward Delete
-                if let selected = selectedCell {
+                if selectionState.selectionStart != nil {
+                    // Clear all cells in selection range
+                    for r in 0..<viewModel.rows {
+                        for c in 0..<viewModel.columns {
+                            if selectionState.isInSelection(row: r, col: c) {
+                                viewModel.cells[r][c].input = ""
+                            }
+                        }
+                    }
+                    selectionState.clearSelection()
+                    viewModel.reevaluateAllCells()
+                    viewModel.save()
+                } else if let selected = selectedCell {
                     viewModel.cells[selected.row][selected.col].input = ""
                     viewModel.updateCell(at: selected.row, column: selected.col)
                 }
@@ -365,7 +407,7 @@ struct GridView: View {
                     originalEditInput = viewModel.cells[selected.row][selected.col].input
                     viewModel.cells[selected.row][selected.col].input = chars
                     currentEditingCell = selected
-                    selectionState.editingCell = selected
+
                     selectionState.clearSelection()
                     return nil
                 }
@@ -435,7 +477,6 @@ struct GridView: View {
             } else if !(editingCell.row == row && editingCell.col == col) {
                 viewModel.updateCell(at: editingCell.row, column: editingCell.col)
                 currentEditingCell = nil
-                selectionState.editingCell = nil
                 selectionState.clearSelection()
                 formulaRefStart = nil
                 formulaRefLength = 0
@@ -521,6 +562,7 @@ struct GridView: View {
         input.replaceSubrange(startIndex..<endIndex, with: ref)
         viewModel.cells[editingCell.row][editingCell.col].input = input
         formulaRefLength = ref.count
+        viewModel.objectWillChange.send()
     }
 
     private func columnName(_ index: Int) -> String {
@@ -543,6 +585,7 @@ struct CellView: View, Equatable {
     let isSelected: Bool
     let isCursorCell: Bool
     let isEditing: Bool
+    let inputValue: String
     var inputBinding: Binding<String>
     let onFinishEditing: (EditAction) -> Void
     let onCellClick: (Int, Int) -> Void
@@ -554,7 +597,8 @@ struct CellView: View, Equatable {
         lhs.col == rhs.col &&
         lhs.isSelected == rhs.isSelected &&
         lhs.isCursorCell == rhs.isCursorCell &&
-        lhs.isEditing == rhs.isEditing
+        lhs.isEditing == rhs.isEditing &&
+        lhs.inputValue == rhs.inputValue
     }
 
     var body: some View {
