@@ -397,6 +397,8 @@ struct GridView: View {
                         for c in 0..<viewModel.columns {
                             if selectionState.isInSelection(row: r, col: c) {
                                 viewModel.cells[r][c].input = ""
+                                viewModel.cells[r][c].displayValue = ""
+                                viewModel.cells[r][c].hasError = false
                             }
                         }
                     }
