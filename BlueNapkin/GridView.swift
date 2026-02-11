@@ -2,6 +2,7 @@ import SwiftUI
 
 enum EditAction {
     case commit
+    case commitUp
     case cancel
     case tabForward
     case tabBack
@@ -241,6 +242,10 @@ struct GridView: View {
                                         if row + 1 < viewModel.rows {
                                             selectedCell = (row + 1, col)
                                         }
+                                    case .commitUp:
+                                        if row - 1 >= 0 {
+                                            selectedCell = (row - 1, col)
+                                        }
                                     case .cancel:
                                         break
                                     case .tabForward:
@@ -392,6 +397,14 @@ struct GridView: View {
                 else { moveSelection(dr: 0, dc: 1) }
                 return nil
             case 36: // Return/Enter
+                if shift {
+                    // Shift+Enter: move up
+                    if let current = selectedCell, current.row - 1 >= 0 {
+                        selectedCell = (current.row - 1, current.col)
+                        selectionState.clearSelection()
+                    }
+                    return nil
+                }
                 if let selected = selectedCell {
                     originalEditInput = viewModel.cells[selected.row][selected.col].input
                     currentEditingCell = selected
@@ -836,7 +849,11 @@ struct CustomTextField: NSViewRepresentable {
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                parent.onAction(.commit)
+                if NSApp.currentEvent?.modifierFlags.contains(.shift) == true {
+                    parent.onAction(.commitUp)
+                } else {
+                    parent.onAction(.commit)
+                }
                 return true
             }
             if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
