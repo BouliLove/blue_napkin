@@ -12,8 +12,13 @@ enum FormulaError: Error {
 
 class FormulaEngine {
     func evaluate(formula: String, getCellValue: @escaping (Int, Int) -> String) throws -> String {
+        // Auto-close unclosed parentheses
+        let open = formula.filter { $0 == "(" }.count
+        let close = formula.filter { $0 == ")" }.count
+        let balanced = open > close ? formula + String(repeating: ")", count: open - close) : formula
+
         // First process functions (SUM, PRODUCT, AVERAGE)
-        var processedFormula = try processFunctions(formula: formula, getCellValue: getCellValue)
+        var processedFormula = try processFunctions(formula: balanced, getCellValue: getCellValue)
 
         // Then replace any remaining cell references
         processedFormula = try replaceCellReferences(formula: processedFormula, getCellValue: getCellValue)
