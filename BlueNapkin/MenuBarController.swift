@@ -65,7 +65,10 @@ class MenuBarController: NSObject, ObservableObject {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
         panel.level = .floating
+        panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let hostingController = NSHostingController(rootView: ContentView())
         hostingController.preferredContentSize = NSSize(width: 600, height: 400)

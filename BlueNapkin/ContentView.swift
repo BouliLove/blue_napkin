@@ -4,9 +4,10 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Title bar
-            HStack {
+            HStack(spacing: 6) {
                 Text("BlueNapkin")
-                    .font(.headline)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary.opacity(0.7))
                     .padding(.leading, 12)
 
                 Spacer()
@@ -15,16 +16,16 @@ struct ContentView: View {
                     NSApplication.shared.keyWindow?.orderOut(nil)
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.gray)
-                        .imageScale(.medium)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .padding(.trailing, 12)
+                .padding(.trailing, 10)
             }
-            .frame(height: 36)
+            .frame(height: 32)
             .background(Color(NSColor.windowBackgroundColor))
 
-            Divider()
+            Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
 
             // Grid view
             GridView()
@@ -32,6 +33,11 @@ struct ContentView: View {
 
         }
         .frame(minWidth: 400, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5)
+        )
     }
 }
 

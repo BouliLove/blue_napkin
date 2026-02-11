@@ -174,16 +174,24 @@ struct GridView: View {
                 // Column headers
                 HStack(spacing: 0) {
                     Rectangle()
-                        .fill(Color.blue.opacity(0.08))
+                        .fill(Color(NSColor.windowBackgroundColor))
                         .frame(width: headerWidth, height: headerHeight)
-                        .border(Color.blue.opacity(0.12))
+                        .overlay(alignment: .bottom) {
+                            Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
+                        }
 
                     ForEach(0..<viewModel.columns, id: \.self) { col in
                         Text(columnName(col))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 10, weight: .medium, design: .default))
+                            .foregroundColor(.secondary)
                             .frame(width: cellWidth, height: headerHeight)
-                            .background(Color.blue.opacity(0.08))
-                            .border(Color.blue.opacity(0.12))
+                            .background(Color(NSColor.windowBackgroundColor))
+                            .overlay(alignment: .bottom) {
+                                Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
+                            }
+                            .overlay(alignment: .trailing) {
+                                Color(NSColor.separatorColor).opacity(0.3).frame(width: 0.5)
+                            }
                     }
                 }
 
@@ -191,10 +199,13 @@ struct GridView: View {
                 ForEach(0..<viewModel.rows, id: \.self) { row in
                     HStack(spacing: 0) {
                         Text("\(row + 1)")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 10, weight: .medium).monospacedDigit())
+                            .foregroundColor(.secondary)
                             .frame(width: headerWidth, height: cellHeight)
-                            .background(Color.blue.opacity(0.08))
-                            .border(Color.blue.opacity(0.12))
+                            .background(Color(NSColor.windowBackgroundColor))
+                            .overlay(alignment: .trailing) {
+                                Color(NSColor.separatorColor).opacity(0.3).frame(width: 0.5)
+                            }
 
                         ForEach(0..<viewModel.columns, id: \.self) { col in
                             CellView(
@@ -260,19 +271,24 @@ struct GridView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
+            Color(NSColor.separatorColor).opacity(0.4).frame(height: 0.5)
 
             // Formula bar
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 if let cell = activeCell {
                     let text = currentEditingCell != nil ? formulaBarText : viewModel.cells[cell.row][cell.col].input
                     if !text.isEmpty {
-                        Text("\(columnName(cell.col))\(cell.row + 1)  ")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.secondary)
+                        Text("\(columnName(cell.col))\(cell.row + 1)")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.accentColor)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
                             .fixedSize()
                         Text(text)
                             .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.primary.opacity(0.8))
                             .fixedSize()
                             .lineLimit(1)
                     } else {
@@ -284,7 +300,7 @@ struct GridView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
-            .frame(height: 24)
+            .frame(height: 26)
             .background(Color(NSColor.windowBackgroundColor))
         }
         .onAppear { installEventMonitor() }
@@ -588,9 +604,9 @@ struct GridView: View {
     }
 
     private var tipText: some View {
-        Text("Tip: =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)")
-            .font(.system(size: 10))
-            .foregroundColor(.secondary)
+        Text("=SUM(A1:A10)  =AVERAGE(B1:B5)  =PRODUCT(C1:C3)")
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(Color(NSColor.tertiaryLabelColor))
     }
 
     private func columnName(_ index: Int) -> String {
@@ -629,6 +645,8 @@ struct CellView: View, Equatable {
         lhs.inputValue == rhs.inputValue
     }
 
+    private static let gridLine = Color(NSColor.separatorColor).opacity(0.4)
+
     var body: some View {
         ZStack(alignment: .leading) {
             if isEditing {
@@ -636,15 +654,18 @@ struct CellView: View, Equatable {
                     text: inputBinding,
                     onAction: { action in onFinishEditing(action) }
                 )
-                .font(.system(size: 12))
+                .font(.system(size: 12, design: .default))
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(4)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
             } else {
                 Text(displayValue)
-                    .font(.system(size: 12))
-                    .foregroundColor(hasError ? .red : .primary)
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundColor(hasError ? Color(NSColor.systemRed) : .primary)
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                    .padding(4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         onCellClick(row, col)
@@ -652,29 +673,48 @@ struct CellView: View, Equatable {
             }
         }
         .background(backgroundColor)
-        .border(borderColor, width: (isCursorCell || isEditing) ? 2 : 1)
+        .overlay(alignment: .bottom) {
+            if !isCursorCell && !isEditing {
+                Self.gridLine.frame(height: 0.5)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if !isCursorCell && !isEditing {
+                Self.gridLine.frame(width: 0.5)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 2)
+                .strokeBorder(focusBorderColor, lineWidth: focusBorderWidth)
+        )
     }
 
     private var backgroundColor: Color {
-        if isSelected {
-            return Color.accentColor.opacity(0.08)
-        } else if isCursorCell || isEditing {
-            return Color.accentColor.opacity(0.03)
+        if isEditing {
+            return Color(NSColor.controlBackgroundColor)
+        } else if isSelected {
+            return Color.accentColor.opacity(0.10)
+        } else if isCursorCell {
+            return Color.accentColor.opacity(0.04)
         } else if row % 2 == 1 {
-            return Color.blue.opacity(0.03)
+            return Color(NSColor.controlBackgroundColor).opacity(0.5)
         } else {
-            return Color.blue.opacity(0.01)
+            return .clear
         }
     }
 
-    private var borderColor: Color {
+    private var focusBorderColor: Color {
         if isCursorCell || isEditing {
             return Color.accentColor
         } else if isSelected {
-            return Color.accentColor.opacity(0.4)
+            return Color.accentColor.opacity(0.35)
         } else {
-            return Color.blue.opacity(0.12)
+            return .clear
         }
+    }
+
+    private var focusBorderWidth: CGFloat {
+        (isCursorCell || isEditing) ? 2 : isSelected ? 1 : 0
     }
 }
 
