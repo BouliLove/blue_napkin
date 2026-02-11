@@ -248,6 +248,13 @@ struct GridView: View {
                                 },
                                 onCellClick: { clickedRow, clickedCol in
                                     handleCellClick(row: clickedRow, col: clickedCol)
+                                },
+                                onCellDoubleClick: { clickedRow, clickedCol in
+                                    selectedCell = (clickedRow, clickedCol)
+                                    originalEditInput = viewModel.cells[clickedRow][clickedCol].input
+                                    currentEditingCell = (clickedRow, clickedCol)
+                                    formulaBarText = viewModel.cells[clickedRow][clickedCol].input
+                                    selectionState.clearSelection()
                                 }
                             )
                             .equatable()
@@ -611,6 +618,7 @@ struct CellView: View, Equatable {
     var inputBinding: Binding<String>
     let onFinishEditing: (EditAction) -> Void
     let onCellClick: (Int, Int) -> Void
+    let onCellDoubleClick: (Int, Int) -> Void
 
     static func == (lhs: CellView, rhs: CellView) -> Bool {
         lhs.displayValue == rhs.displayValue &&
@@ -640,7 +648,10 @@ struct CellView: View, Equatable {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .padding(4)
                     .contentShape(Rectangle())
-                    .onTapGesture {
+                    .onTapGesture(count: 2) {
+                        onCellDoubleClick(row, col)
+                    }
+                    .onTapGesture(count: 1) {
                         onCellClick(row, col)
                     }
             }
