@@ -174,16 +174,16 @@ struct GridView: View {
                 // Column headers
                 HStack(spacing: 0) {
                     Rectangle()
-                        .fill(Color.gray.opacity(0.08))
+                        .fill(Color.blue.opacity(0.08))
                         .frame(width: headerWidth, height: headerHeight)
-                        .border(Color.gray.opacity(0.12))
+                        .border(Color.blue.opacity(0.12))
 
                     ForEach(0..<viewModel.columns, id: \.self) { col in
                         Text(columnName(col))
                             .font(.system(size: 11, weight: .medium))
                             .frame(width: cellWidth, height: headerHeight)
-                            .background(Color.gray.opacity(0.08))
-                            .border(Color.gray.opacity(0.12))
+                            .background(Color.blue.opacity(0.08))
+                            .border(Color.blue.opacity(0.12))
                     }
                 }
 
@@ -193,8 +193,8 @@ struct GridView: View {
                         Text("\(row + 1)")
                             .font(.system(size: 11, weight: .medium))
                             .frame(width: headerWidth, height: cellHeight)
-                            .background(Color.gray.opacity(0.08))
-                            .border(Color.gray.opacity(0.12))
+                            .background(Color.blue.opacity(0.08))
+                            .border(Color.blue.opacity(0.12))
 
                         ForEach(0..<viewModel.columns, id: \.self) { col in
                             CellView(
@@ -588,9 +588,9 @@ struct CellView: View, Equatable {
         } else if isCursorCell || isEditing {
             return Color.accentColor.opacity(0.03)
         } else if row % 2 == 1 {
-            return Color.gray.opacity(0.03)
+            return Color.blue.opacity(0.03)
         } else {
-            return Color.gray.opacity(0.01)
+            return Color.blue.opacity(0.01)
         }
     }
 
@@ -600,7 +600,7 @@ struct CellView: View, Equatable {
         } else if isSelected {
             return Color.accentColor.opacity(0.4)
         } else {
-            return Color.gray.opacity(0.12)
+            return Color.blue.opacity(0.12)
         }
     }
 }
