@@ -156,6 +156,7 @@ struct GridView: View {
     @State private var originalEditInput: String = ""
     @State private var formulaRefStart: Int?
     @State private var formulaRefLength: Int = 0
+    @State private var formulaBarText: String = ""
 
     let cellWidth: CGFloat = 80
     let cellHeight: CGFloat = 30
@@ -207,7 +208,10 @@ struct GridView: View {
                                 inputValue: viewModel.cells[row][col].input,
                                 inputBinding: Binding(
                                     get: { viewModel.cells[row][col].input },
-                                    set: { viewModel.cells[row][col].input = $0 }
+                                    set: {
+                                        viewModel.cells[row][col].input = $0
+                                        formulaBarText = $0
+                                    }
                                 ),
                                 onFinishEditing: { action in
                                     if action != .cancel {
@@ -216,6 +220,7 @@ struct GridView: View {
                                         viewModel.cells[row][col].input = originalEditInput
                                     }
                                     currentEditingCell = nil
+                                    formulaBarText = ""
 
                                     selectionState.clearSelection()
                                     formulaRefStart = nil
@@ -258,21 +263,22 @@ struct GridView: View {
 
             // Formula bar
             HStack(spacing: 0) {
-                if let cell = activeCell,
-                   !viewModel.cells[cell.row][cell.col].input.isEmpty {
-                    Text("\(columnName(cell.col))\(cell.row + 1)  ")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .fixedSize()
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(viewModel.cells[cell.row][cell.col].input)
+                if let cell = activeCell {
+                    let text = currentEditingCell != nil ? formulaBarText : viewModel.cells[cell.row][cell.col].input
+                    if !text.isEmpty {
+                        Text("\(columnName(cell.col))\(cell.row + 1)  ")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .fixedSize()
+                        Text(text)
                             .font(.system(size: 11, design: .monospaced))
                             .fixedSize()
+                            .lineLimit(1)
+                    } else {
+                        tipText
                     }
                 } else {
-                    Text("Tip: =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                    tipText
                 }
                 Spacer(minLength: 0)
             }
@@ -357,6 +363,7 @@ struct GridView: View {
                 if let selected = selectedCell {
                     originalEditInput = viewModel.cells[selected.row][selected.col].input
                     currentEditingCell = selected
+                    formulaBarText = viewModel.cells[selected.row][selected.col].input
 
                     selectionState.clearSelection()
                     return nil
@@ -410,6 +417,7 @@ struct GridView: View {
                     originalEditInput = viewModel.cells[selected.row][selected.col].input
                     viewModel.cells[selected.row][selected.col].input = chars
                     currentEditingCell = selected
+                    formulaBarText = chars
 
                     selectionState.clearSelection()
                     return nil
@@ -480,6 +488,7 @@ struct GridView: View {
             } else if !(editingCell.row == row && editingCell.col == col) {
                 viewModel.updateCell(at: editingCell.row, column: editingCell.col)
                 currentEditingCell = nil
+                formulaBarText = ""
                 selectionState.clearSelection()
                 formulaRefStart = nil
                 formulaRefLength = 0
@@ -564,8 +573,15 @@ struct GridView: View {
 
         input.replaceSubrange(startIndex..<endIndex, with: ref)
         viewModel.cells[editingCell.row][editingCell.col].input = input
+        formulaBarText = input
         formulaRefLength = ref.count
         viewModel.objectWillChange.send()
+    }
+
+    private var tipText: some View {
+        Text("Tip: =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)")
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
     }
 
     private func columnName(_ index: Int) -> String {
