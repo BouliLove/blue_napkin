@@ -12,7 +12,7 @@ struct ContentView: View {
                 Spacer()
 
                 Button(action: {
-                    NSApplication.shared.keyWindow?.close()
+                    NSApplication.shared.keyWindow?.orderOut(nil)
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.gray)
@@ -31,7 +31,7 @@ struct ContentView: View {
                 .background(Color(NSColor.controlBackgroundColor))
 
         }
-        .frame(width: 600, height: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
