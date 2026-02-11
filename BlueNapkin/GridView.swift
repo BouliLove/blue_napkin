@@ -268,6 +268,21 @@ struct GridView: View {
                     }
                 }
             }
+            .coordinateSpace(name: "gridContent")
+            .overlay {
+                // Drag overlay for formula range selection
+                if currentEditingCell != nil {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 5, coordinateSpace: .named("gridContent"))
+                                .onChanged { value in
+                                    handleFormulaDrag(location: value.location, isStart: false, startLocation: value.startLocation)
+                                }
+                        )
+                        .allowsHitTesting(true)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -495,10 +510,18 @@ struct GridView: View {
     // MARK: - Cell Click Handling
 
     private func handleCellClick(row: Int, col: Int) {
+        let shift = NSEvent.modifierFlags.contains(.shift)
+
         if let editingCell = currentEditingCell {
             if viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
                !(editingCell.row == row && editingCell.col == col) {
-                selectionState.startSelection(at: row, col: col)
+                if shift && selectionState.selectionStart != nil {
+                    // Shift+click: extend existing range
+                    selectionState.updateSelection(to: row, col: col)
+                } else {
+                    // Normal click: start new single-cell reference
+                    selectionState.startSelection(at: row, col: col)
+                }
                 if formulaRefStart == nil {
                     formulaRefStart = viewModel.cells[editingCell.row][editingCell.col].input.count
                     formulaRefLength = 0
@@ -548,6 +571,35 @@ struct GridView: View {
 
     // MARK: - Formula Reference Selection
 
+    private func cellAt(location: CGPoint) -> (row: Int, col: Int)? {
+        let col = Int((location.x - headerWidth) / cellWidth)
+        let row = Int((location.y - headerHeight) / cellHeight)
+        guard row >= 0, row < viewModel.rows, col >= 0, col < viewModel.columns else { return nil }
+        return (row, col)
+    }
+
+    private func handleFormulaDrag(location: CGPoint, isStart: Bool, startLocation: CGPoint) {
+        guard let editingCell = currentEditingCell,
+              viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("=") else { return }
+
+        guard let startCell = cellAt(location: startLocation),
+              let currentCell = cellAt(location: location) else { return }
+
+        // Don't reference the editing cell itself
+        if startCell.row == editingCell.row && startCell.col == editingCell.col { return }
+
+        if formulaRefStart == nil {
+            formulaRefStart = viewModel.cells[editingCell.row][editingCell.col].input.count
+            formulaRefLength = 0
+        }
+
+        selectionState.startSelection(at: startCell.row, col: startCell.col)
+        if currentCell.row != startCell.row || currentCell.col != startCell.col {
+            selectionState.updateSelection(to: currentCell.row, col: currentCell.col)
+        }
+        updateFormulaReference()
+    }
+
     private func handleFormulaArrowKey(keyCode: UInt16, shift: Bool) {
         guard let editingCell = currentEditingCell else { return }
 
@@ -566,6 +618,16 @@ struct GridView: View {
             let newRow = max(0, min(viewModel.rows - 1, end.row + dr))
             let newCol = max(0, min(viewModel.columns - 1, end.col + dc))
             selectionState.updateSelection(to: newRow, col: newCol)
+        } else if shift && selectionState.selectionStart == nil {
+            // Start new range from editing cell, extend in direction
+            let startRow = max(0, min(viewModel.rows - 1, editingCell.row + dr))
+            let startCol = max(0, min(viewModel.columns - 1, editingCell.col + dc))
+            selectionState.startSelection(at: editingCell.row, col: editingCell.col)
+            selectionState.updateSelection(to: startRow, col: startCol)
+            if formulaRefStart == nil {
+                formulaRefStart = viewModel.cells[editingCell.row][editingCell.col].input.count
+                formulaRefLength = 0
+            }
         } else if !shift && selectionState.selectionStart != nil {
             // Move selection to new single cell
             guard let end = selectionState.selectionEnd else { return }
