@@ -252,6 +252,7 @@ struct GridView: View {
                             )
                             .equatable()
                             .frame(width: cellWidth, height: cellHeight)
+                            .zIndex(currentEditingCell?.row == row && currentEditingCell?.col == col ? 1 : 0)
                         }
                     }
                 }
@@ -623,13 +624,14 @@ struct CellView: View, Equatable {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .leading) {
             if isEditing {
                 CustomTextField(
                     text: inputBinding,
                     onAction: { action in onFinishEditing(action) }
                 )
                 .font(.system(size: 12))
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(4)
             } else {
                 Text(displayValue)
@@ -670,17 +672,27 @@ struct CellView: View, Equatable {
     }
 }
 
+// NSTextField subclass that reports intrinsic width based on text content
+private class ExpandingTextField: NSTextField {
+    override var intrinsicContentSize: NSSize {
+        let textWidth = attributedStringValue.size().width + 8
+        let width = max(72, textWidth) // at least the cell padding area
+        return NSSize(width: width, height: super.intrinsicContentSize.height)
+    }
+}
+
 // Custom TextField that handles Enter, Escape, and Tab keys
 struct CustomTextField: NSViewRepresentable {
     @Binding var text: String
     let onAction: (EditAction) -> Void
 
     func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
+        let textField = ExpandingTextField()
         textField.delegate = context.coordinator
         textField.isBordered = false
         textField.backgroundColor = .clear
         textField.focusRingType = .none
+        textField.setContentCompressionResistancePriority(.required, for: .horizontal)
         DispatchQueue.main.async {
             textField.window?.makeFirstResponder(textField)
             if let editor = textField.currentEditor() {
@@ -693,10 +705,8 @@ struct CustomTextField: NSViewRepresentable {
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
-            if let editor = nsView.currentEditor() {
-                editor.selectedRange = NSRange(location: nsView.stringValue.count, length: 0)
-            }
         }
+        nsView.invalidateIntrinsicContentSize()
         context.coordinator.parent = self
     }
 
