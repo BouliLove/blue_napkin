@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-class MenuBarController: ObservableObject {
+class MenuBarController: NSObject, ObservableObject {
     private var statusItem: NSStatusItem?
     private var panel: NSPanel?
 
-    init() {
+    override init() {
+        super.init()
         setupMenuBar()
         setupPanel()
     }
@@ -66,7 +67,10 @@ class MenuBarController: ObservableObject {
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentViewController = NSHostingController(rootView: ContentView())
+        let hostingController = NSHostingController(rootView: ContentView())
+        hostingController.preferredContentSize = NSSize(width: 600, height: 400)
+        panel.contentViewController = hostingController
+        panel.setContentSize(NSSize(width: 600, height: 400))
         panel.minSize = NSSize(width: 400, height: 300)
         panel.maxSize = NSSize(width: 1200, height: 800)
         panel.standardWindowButton(.closeButton)?.isHidden = true
@@ -83,6 +87,7 @@ class MenuBarController: ObservableObject {
         } else {
             positionPanelBelowStatusItem(button: button)
             panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 

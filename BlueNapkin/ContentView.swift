@@ -31,7 +31,7 @@ struct ContentView: View {
                 .background(Color(NSColor.controlBackgroundColor))
 
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 400, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
     }
 }
 

@@ -257,21 +257,24 @@ struct GridView: View {
             Divider()
 
             // Formula bar
-            HStack(spacing: 8) {
+            HStack(spacing: 0) {
                 if let cell = activeCell,
                    !viewModel.cells[cell.row][cell.col].input.isEmpty {
-                    Text("\(columnName(cell.col))\(cell.row + 1)")
+                    Text("\(columnName(cell.col))\(cell.row + 1)  ")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundColor(.secondary)
-                    Text(viewModel.cells[cell.row][cell.col].input)
-                        .font(.system(size: 11, design: .monospaced))
-                        .lineLimit(1)
+                        .fixedSize()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(viewModel.cells[cell.row][cell.col].input)
+                            .font(.system(size: 11, design: .monospaced))
+                            .fixedSize()
+                    }
                 } else {
                     Text("Tip: =SUM(A1:A10), =AVERAGE(B1:B5), =PRODUCT(C1:C3)")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
             .frame(height: 24)
