@@ -23,8 +23,14 @@ class CellModel: ObservableObject, Identifiable {
         }
 
         if input.hasPrefix("=") {
-            // It's a formula
-            let formula = String(input.dropFirst())
+            // It's a formula – auto-close unclosed parentheses before storing
+            var formula = String(input.dropFirst())
+            let openCount = formula.filter { $0 == "(" }.count
+            let closeCount = formula.filter { $0 == ")" }.count
+            if openCount > closeCount {
+                formula += String(repeating: ")", count: openCount - closeCount)
+                input = "=" + formula
+            }
             do {
                 let result = try engine.evaluate(formula: formula, getCellValue: getCellValue)
                 displayValue = result
