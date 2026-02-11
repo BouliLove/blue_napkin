@@ -160,6 +160,8 @@ struct GridView: View {
     @State private var selectedCell: (row: Int, col: Int)?
     @State private var eventMonitor: Any?
     @State private var originalEditInput: String = ""
+    @State private var formulaRefStart: Int?
+    @State private var formulaRefLength: Int = 0
 
     let cellWidth: CGFloat = 80
     let cellHeight: CGFloat = 30
@@ -203,7 +205,6 @@ struct GridView: View {
                                 isSelected: selectionState.isInSelection(row: row, col: col),
                                 isCursorCell: selectedCell?.row == row && selectedCell?.col == col && currentEditingCell == nil,
                                 isEditing: currentEditingCell?.row == row && currentEditingCell?.col == col,
-                                hasSelectionReference: selectionState.selectionStart != nil,
                                 inputBinding: Binding(
                                     get: { viewModel.cells[row][col].input },
                                     set: { viewModel.cells[row][col].input = $0 }
@@ -217,6 +218,8 @@ struct GridView: View {
                                     currentEditingCell = nil
                                     selectionState.editingCell = nil
                                     selectionState.clearSelection()
+                                    formulaRefStart = nil
+                                    formulaRefLength = 0
                                     switch action {
                                     case .commit:
                                         if row + 1 < viewModel.rows {
@@ -240,12 +243,6 @@ struct GridView: View {
                                 },
                                 onCellClick: { clickedRow, clickedCol in
                                     handleCellClick(row: clickedRow, col: clickedCol)
-                                },
-                                onInsertReference: {
-                                    if let ref = selectionState.getSelectionReference() {
-                                        viewModel.cells[row][col].input += ref
-                                        selectionState.clearSelection()
-                                    }
                                 }
                             )
                             .equatable()
@@ -264,8 +261,24 @@ struct GridView: View {
 
     private func installEventMonitor() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // While editing, let the text field handle all keys
-            if currentEditingCell != nil {
+            // While editing a formula, intercept arrow keys for cell reference selection
+            if let editingCell = currentEditingCell {
+                let isFormula = viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("=")
+                if isFormula {
+                    switch event.keyCode {
+                    case 126, 125, 123, 124: // Arrow keys → select cells for reference
+                        handleFormulaArrowKey(keyCode: event.keyCode, shift: event.modifierFlags.contains(.shift))
+                        return nil
+                    default:
+                        // Any other key: commit the reference position and pass to text field
+                        if formulaRefStart != nil {
+                            formulaRefStart = nil
+                            formulaRefLength = 0
+                            selectionState.clearSelection()
+                        }
+                        return event
+                    }
+                }
                 return event
             }
 
@@ -414,11 +427,18 @@ struct GridView: View {
             if viewModel.cells[editingCell.row][editingCell.col].input.hasPrefix("="),
                !(editingCell.row == row && editingCell.col == col) {
                 selectionState.startSelection(at: row, col: col)
+                if formulaRefStart == nil {
+                    formulaRefStart = viewModel.cells[editingCell.row][editingCell.col].input.count
+                    formulaRefLength = 0
+                }
+                updateFormulaReference()
             } else if !(editingCell.row == row && editingCell.col == col) {
                 viewModel.updateCell(at: editingCell.row, column: editingCell.col)
                 currentEditingCell = nil
                 selectionState.editingCell = nil
                 selectionState.clearSelection()
+                formulaRefStart = nil
+                formulaRefLength = 0
                 selectedCell = (row, col)
             }
         } else {
@@ -448,6 +468,61 @@ struct GridView: View {
         selectionState.updateSelection(to: newRow, col: newCol)
     }
 
+    // MARK: - Formula Reference Selection
+
+    private func handleFormulaArrowKey(keyCode: UInt16, shift: Bool) {
+        guard let editingCell = currentEditingCell else { return }
+
+        let dr: Int, dc: Int
+        switch keyCode {
+        case 126: (dr, dc) = (-1, 0)
+        case 125: (dr, dc) = (1, 0)
+        case 123: (dr, dc) = (0, -1)
+        case 124: (dr, dc) = (0, 1)
+        default: return
+        }
+
+        if shift && selectionState.selectionStart != nil {
+            // Extend existing selection to range
+            guard let end = selectionState.selectionEnd else { return }
+            let newRow = max(0, min(viewModel.rows - 1, end.row + dr))
+            let newCol = max(0, min(viewModel.columns - 1, end.col + dc))
+            selectionState.updateSelection(to: newRow, col: newCol)
+        } else if !shift && selectionState.selectionStart != nil {
+            // Move selection to new single cell
+            guard let end = selectionState.selectionEnd else { return }
+            let newRow = max(0, min(viewModel.rows - 1, end.row + dr))
+            let newCol = max(0, min(viewModel.columns - 1, end.col + dc))
+            selectionState.startSelection(at: newRow, col: newCol)
+        } else {
+            // Start new selection from editing cell + direction
+            let newRow = max(0, min(viewModel.rows - 1, editingCell.row + dr))
+            let newCol = max(0, min(viewModel.columns - 1, editingCell.col + dc))
+            selectionState.startSelection(at: newRow, col: newCol)
+            formulaRefStart = viewModel.cells[editingCell.row][editingCell.col].input.count
+            formulaRefLength = 0
+        }
+
+        updateFormulaReference()
+    }
+
+    private func updateFormulaReference() {
+        guard let editingCell = currentEditingCell,
+              let refStart = formulaRefStart,
+              let ref = selectionState.getSelectionReference() else { return }
+
+        var input = viewModel.cells[editingCell.row][editingCell.col].input
+        guard refStart <= input.count else { return }
+
+        let startIndex = input.index(input.startIndex, offsetBy: refStart)
+        let endOffset = min(refStart + formulaRefLength, input.count)
+        let endIndex = input.index(input.startIndex, offsetBy: endOffset)
+
+        input.replaceSubrange(startIndex..<endIndex, with: ref)
+        viewModel.cells[editingCell.row][editingCell.col].input = input
+        formulaRefLength = ref.count
+    }
+
     private func columnName(_ index: Int) -> String {
         var name = ""
         var col = index
@@ -468,11 +543,9 @@ struct CellView: View, Equatable {
     let isSelected: Bool
     let isCursorCell: Bool
     let isEditing: Bool
-    let hasSelectionReference: Bool
     var inputBinding: Binding<String>
     let onFinishEditing: (EditAction) -> Void
     let onCellClick: (Int, Int) -> Void
-    let onInsertReference: () -> Void
 
     static func == (lhs: CellView, rhs: CellView) -> Bool {
         lhs.displayValue == rhs.displayValue &&
@@ -481,8 +554,7 @@ struct CellView: View, Equatable {
         lhs.col == rhs.col &&
         lhs.isSelected == rhs.isSelected &&
         lhs.isCursorCell == rhs.isCursorCell &&
-        lhs.isEditing == rhs.isEditing &&
-        lhs.hasSelectionReference == rhs.hasSelectionReference
+        lhs.isEditing == rhs.isEditing
     }
 
     var body: some View {
@@ -490,9 +562,7 @@ struct CellView: View, Equatable {
             if isEditing {
                 CustomTextField(
                     text: inputBinding,
-                    onAction: { action in onFinishEditing(action) },
-                    onInsertReference: onInsertReference,
-                    hasSelectionReference: hasSelectionReference
+                    onAction: { action in onFinishEditing(action) }
                 )
                 .font(.system(size: 12))
                 .padding(4)
@@ -539,8 +609,6 @@ struct CellView: View, Equatable {
 struct CustomTextField: NSViewRepresentable {
     @Binding var text: String
     let onAction: (EditAction) -> Void
-    let onInsertReference: () -> Void
-    let hasSelectionReference: Bool
 
     func makeNSView(context: Context) -> NSTextField {
         let textField = NSTextField()
@@ -560,6 +628,9 @@ struct CustomTextField: NSViewRepresentable {
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
+            if let editor = nsView.currentEditor() {
+                editor.selectedRange = NSRange(location: nsView.stringValue.count, length: 0)
+            }
         }
         context.coordinator.parent = self
     }
@@ -582,11 +653,7 @@ struct CustomTextField: NSViewRepresentable {
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                if parent.hasSelectionReference {
-                    parent.onInsertReference()
-                } else {
-                    parent.onAction(.commit)
-                }
+                parent.onAction(.commit)
                 return true
             }
             if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
