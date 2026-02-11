@@ -64,7 +64,7 @@ class MenuBarController: NSObject, ObservableObject {
         )
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.level = .floating

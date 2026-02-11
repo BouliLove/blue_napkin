@@ -365,6 +365,120 @@ struct ErrorTests {
     }
 }
 
+// MARK: - Negative Numbers & Edge Cases
+
+@Suite("Negative Numbers & Edge Cases")
+struct NegativeEdgeCaseTests {
+    @Test func negativeResult() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("3-10") == "-7")
+    }
+
+    @Test func negativeMultiplication() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "-5")
+        grid.set("B", 1, "3")
+        #expect(try grid.eval("A1*B1") == "-15")
+    }
+
+    @Test func negativeCellInSum() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "-3")
+        grid.set("A", 3, "5")
+        #expect(try grid.eval("SUM(A1:A3)") == "12")
+    }
+
+    @Test func zeroCellArithmetic() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "0")
+        #expect(try grid.eval("A1+100") == "100")
+    }
+
+    @Test func veryLargeNumber() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("999999*999999") == "999998000001")
+    }
+
+    @Test func decimalPrecision() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("0.1+0.2") == "0.3")
+    }
+}
+
+// MARK: - Reversed & Single-Cell Ranges
+
+@Suite("Range Variations")
+struct RangeVariationTests {
+    @Test func reversedRange() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "20")
+        grid.set("A", 3, "30")
+        // B3:A1 reversed → should still work
+        #expect(try grid.eval("SUM(A3:A1)") == "60")
+    }
+
+    @Test func singleCellRange() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "42")
+        #expect(try grid.eval("SUM(A1:A1)") == "42")
+    }
+
+    @Test func rectangularRangeProduct() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "2")
+        grid.set("A", 2, "3")
+        grid.set("B", 1, "4")
+        grid.set("B", 2, "5")
+        #expect(try grid.eval("PRODUCT(A1:B2)") == "120")
+    }
+
+    @Test func averageWithNegatives() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "-10")
+        #expect(try grid.eval("AVERAGE(A1:A2)") == "0")
+    }
+}
+
+// MARK: - Chained References & Complex Formulas
+
+@Suite("Complex Formulas")
+struct ComplexFormulaTests {
+    @Test func multipleOperatorsWithCells() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("B", 1, "5")
+        grid.set("C", 1, "2")
+        #expect(try grid.eval("A1+B1*C1") == "20")
+    }
+
+    @Test func sumMinusAverage() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "20")
+        grid.set("A", 3, "30")
+        // SUM=60, AVERAGE=20 → 60-20=40
+        #expect(try grid.eval("SUM(A1:A3)-AVERAGE(A1:A3)") == "40")
+    }
+
+    @Test func productTimesConstant() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "2")
+        grid.set("A", 2, "3")
+        #expect(try grid.eval("PRODUCT(A1:A2)+10") == "16")
+    }
+
+    @Test func formulaWithSpacesInFunction() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "20")
+        // SUM( A1 , A2 ) with spaces around args
+        #expect(try grid.eval("SUM( A1 , A2 )") == "30")
+    }
+}
+
 // MARK: - CellModel Tests
 
 @Suite("CellModel")
