@@ -248,13 +248,6 @@ struct GridView: View {
                                 },
                                 onCellClick: { clickedRow, clickedCol in
                                     handleCellClick(row: clickedRow, col: clickedCol)
-                                },
-                                onCellDoubleClick: { clickedRow, clickedCol in
-                                    selectedCell = (clickedRow, clickedCol)
-                                    originalEditInput = viewModel.cells[clickedRow][clickedCol].input
-                                    currentEditingCell = (clickedRow, clickedCol)
-                                    formulaBarText = viewModel.cells[clickedRow][clickedCol].input
-                                    selectionState.clearSelection()
                                 }
                             )
                             .equatable()
@@ -504,6 +497,12 @@ struct GridView: View {
                 formulaRefLength = 0
                 selectedCell = (row, col)
             }
+        } else if selectedCell?.row == row && selectedCell?.col == col {
+            // Click on already-selected cell → enter edit mode
+            originalEditInput = viewModel.cells[row][col].input
+            currentEditingCell = (row, col)
+            formulaBarText = viewModel.cells[row][col].input
+            selectionState.clearSelection()
         } else {
             selectedCell = (row, col)
             selectionState.clearSelection()
@@ -618,7 +617,6 @@ struct CellView: View, Equatable {
     var inputBinding: Binding<String>
     let onFinishEditing: (EditAction) -> Void
     let onCellClick: (Int, Int) -> Void
-    let onCellDoubleClick: (Int, Int) -> Void
 
     static func == (lhs: CellView, rhs: CellView) -> Bool {
         lhs.displayValue == rhs.displayValue &&
@@ -648,10 +646,7 @@ struct CellView: View, Equatable {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .padding(4)
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        onCellDoubleClick(row, col)
-                    }
-                    .onTapGesture(count: 1) {
+                    .onTapGesture {
                         onCellClick(row, col)
                     }
             }
