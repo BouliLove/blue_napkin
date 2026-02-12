@@ -142,6 +142,10 @@ class GridViewModel: ObservableObject {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
+    static func clearStorage() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
     init() {
         for row in 0..<rows {
             var rowCells: [CellModel] = []
@@ -842,7 +846,7 @@ struct GridView: View {
     }
 
     private var tipText: some View {
-        Text("=SUM(A1:A10)  =AVERAGE(B1:B5)  =PRODUCT(C1:C3)")
+        Text("SUM  AVERAGE  MIN  MAX  COUNT  PRODUCT  ROUND  ABS")
             .font(.system(size: 10, design: .monospaced))
             .foregroundColor(Color(NSColor.tertiaryLabelColor))
     }

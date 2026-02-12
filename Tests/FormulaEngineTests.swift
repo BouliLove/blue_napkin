@@ -556,6 +556,7 @@ struct DependencyTests {
 @Suite("Circular Reference Detection")
 struct CircularReferenceTests {
     @Test func directCircularReference() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         // A1 = =B1, B1 = =A1
         vm.cells[0][0].input = "=B1"
@@ -568,6 +569,7 @@ struct CircularReferenceTests {
     }
 
     @Test func selfReference() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         // A1 = =A1
         vm.cells[0][0].input = "=A1"
@@ -577,6 +579,7 @@ struct CircularReferenceTests {
     }
 
     @Test func indirectCircularReference() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         // A1 = =B1, B1 = =C1, C1 = =A1
         vm.cells[0][0].input = "=B1"
@@ -589,6 +592,7 @@ struct CircularReferenceTests {
     }
 
     @Test func nonCircularCellsUnaffected() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         // A1 = =B1, B1 = =A1 (circular), C1 = 42 (not circular)
         vm.cells[0][0].input = "=B1"
@@ -600,6 +604,7 @@ struct CircularReferenceTests {
     }
 
     @Test func formulaDependingOnCircularShowsError() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         // A1 = =A1 (circular), B1 depends on A1
         vm.cells[0][0].input = "=A1"
@@ -616,6 +621,7 @@ struct CircularReferenceTests {
 @Suite("Undo/Redo")
 struct UndoRedoTests {
     @Test func undoSingleCellChange() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         vm.withUndo(row: 0, col: 0) {
             vm.cells[0][0].input = "hello"
@@ -628,6 +634,7 @@ struct UndoRedoTests {
     }
 
     @Test func redoAfterUndo() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         vm.withUndo(row: 0, col: 0) {
             vm.cells[0][0].input = "42"
@@ -641,6 +648,7 @@ struct UndoRedoTests {
     }
 
     @Test func multipleUndos() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         vm.withUndo(row: 0, col: 0) {
             vm.cells[0][0].input = "first"
@@ -658,6 +666,7 @@ struct UndoRedoTests {
     }
 
     @Test func undoMultiCellDelete() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         vm.cells[0][0].input = "A"
         vm.cells[0][1].input = "B"
@@ -678,6 +687,7 @@ struct UndoRedoTests {
     }
 
     @Test func newChangeClearsRedoStack() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         vm.withUndo(row: 0, col: 0) {
             vm.cells[0][0].input = "first"
@@ -694,10 +704,137 @@ struct UndoRedoTests {
     }
 
     @Test func undoOnEmptyStackDoesNothing() {
+        GridViewModel.clearStorage()
         let vm = GridViewModel()
         vm.cells[0][0].input = "keep"
         vm.reevaluateAllCells()
         vm.undo() // Should be no-op
         #expect(vm.cells[0][0].input == "keep")
+    }
+}
+
+// MARK: - MIN Function
+
+@Suite("MIN Function")
+struct MinTests {
+    @Test func minRange() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "3")
+        grid.set("A", 3, "7")
+        #expect(try grid.eval("MIN(A1:A3)") == "3")
+    }
+
+    @Test func minIndividualCells() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "5")
+        grid.set("B", 1, "2")
+        grid.set("C", 1, "8")
+        #expect(try grid.eval("MIN(A1,B1,C1)") == "2")
+    }
+
+    @Test func minWithNegatives() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "-3")
+        grid.set("A", 2, "5")
+        grid.set("A", 3, "-7")
+        #expect(try grid.eval("MIN(A1:A3)") == "-7")
+    }
+}
+
+// MARK: - MAX Function
+
+@Suite("MAX Function")
+struct MaxTests {
+    @Test func maxRange() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "3")
+        grid.set("A", 3, "7")
+        #expect(try grid.eval("MAX(A1:A3)") == "10")
+    }
+
+    @Test func maxIndividualCells() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "5")
+        grid.set("B", 1, "2")
+        grid.set("C", 1, "8")
+        #expect(try grid.eval("MAX(A1,B1,C1)") == "8")
+    }
+
+    @Test func maxWithNegatives() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "-3")
+        grid.set("A", 2, "-5")
+        grid.set("A", 3, "-1")
+        #expect(try grid.eval("MAX(A1:A3)") == "-1")
+    }
+}
+
+// MARK: - COUNT Function
+
+@Suite("COUNT Function")
+struct CountTests {
+    @Test func countRange() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "20")
+        grid.set("A", 3, "30")
+        #expect(try grid.eval("COUNT(A1:A3)") == "3")
+    }
+
+    @Test func countWithEmptyCells() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        // A2 is empty
+        grid.set("A", 3, "30")
+        #expect(try grid.eval("COUNT(A1:A3)") == "2")
+    }
+}
+
+// MARK: - ABS Function
+
+@Suite("ABS Function")
+struct AbsTests {
+    @Test func absNegative() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("ABS(-5)") == "5")
+    }
+
+    @Test func absPositive() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("ABS(3)") == "3")
+    }
+
+    @Test func absCellReference() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "-42")
+        #expect(try grid.eval("ABS(A1)") == "42")
+    }
+}
+
+// MARK: - ROUND Function
+
+@Suite("ROUND Function")
+struct RoundTests {
+    @Test func roundToInteger() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("ROUND(3.7)") == "4")
+    }
+
+    @Test func roundToTwoDecimals() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("ROUND(3.14159;2)") == "3.14")
+    }
+
+    @Test func roundCellReference() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "2.567")
+        #expect(try grid.eval("ROUND(A1;1)") == "2.6")
+    }
+
+    @Test func roundNegative() throws {
+        let grid = TestGrid()
+        #expect(try grid.eval("ROUND(-2.5)") == "-3")
     }
 }

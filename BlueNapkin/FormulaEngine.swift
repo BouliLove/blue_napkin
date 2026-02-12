@@ -31,8 +31,8 @@ class FormulaEngine {
     private func processFunctions(formula: String, getCellValue: @escaping (Int, Int) -> String) throws -> String {
         var result = formula
 
-        // Match function calls like SUM(A1:A10), AVERAGE(B1:B5), etc.
-        let pattern = "(SUM|PRODUCT|AVERAGE)\\s*\\(([^)]+)\\)"
+        // Match function calls like SUM(A1:A10), AVERAGE(B1:B5), MIN(A1:A3), etc.
+        let pattern = "(SUM|PRODUCT|AVERAGE|MIN|MAX|COUNT|ROUND|ABS)\\s*\\(([^)]+)\\)"
         let regex = try NSRegularExpression(pattern: pattern, options: .caseInsensitive)
 
         // Process functions in reverse order to maintain string indices
@@ -61,17 +61,22 @@ class FormulaEngine {
     }
 
     private func evaluateFunction(functionName: String, args: String, getCellValue: @escaping (Int, Int) -> String) throws -> Double {
-        // Parse the arguments (can be ranges or individual cells separated by commas)
-        let argList = args.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        // Split on semicolons (for ROUND's second arg) then commas within each part
+        let semiParts = args.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+
+        // Parse the main arguments (first semicolon segment, or all if no semicolons)
+        let mainArgs = semiParts[0]
+        let argList = mainArgs.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
         var values: [Double] = []
 
         for arg in argList {
             if arg.contains(":") {
-                // It's a range like A1:A10
                 let rangeValues = try parseRange(range: arg, getCellValue: getCellValue)
                 values.append(contentsOf: rangeValues)
+            } else if let num = Double(arg) {
+                // Plain numeric literal
+                values.append(num)
             } else {
-                // It's a single cell reference
                 let cellValue = try parseSingleCell(cell: arg, getCellValue: getCellValue)
                 values.append(cellValue)
             }
@@ -85,6 +90,22 @@ class FormulaEngine {
             return values.isEmpty ? 0 : values.reduce(1, *)
         case "AVERAGE":
             return values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
+        case "MIN":
+            guard let result = values.min() else { return 0 }
+            return result
+        case "MAX":
+            guard let result = values.max() else { return 0 }
+            return result
+        case "COUNT":
+            return Double(values.count)
+        case "ABS":
+            guard let first = values.first else { return 0 }
+            return abs(first)
+        case "ROUND":
+            guard let first = values.first else { return 0 }
+            let places = semiParts.count > 1 ? (Int(semiParts[1].trimmingCharacters(in: .whitespaces)) ?? 0) : 0
+            let multiplier = pow(10.0, Double(places))
+            return (first * multiplier).rounded() / multiplier
         default:
             throw FormulaError.invalidFunction
         }
