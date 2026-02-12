@@ -519,3 +519,94 @@ struct CellModelTests {
         #expect(cell.hasError == true)
     }
 }
+
+// MARK: - Dependency Extraction
+
+@Suite("Dependency Extraction")
+struct DependencyTests {
+    @Test func simpleCellReference() {
+        let engine = FormulaEngine()
+        let deps = engine.dependencies(from: "B2")
+        #expect(deps.count == 1)
+        #expect(deps[0].row == 1)
+        #expect(deps[0].col == 1)
+    }
+
+    @Test func multipleCellReferences() {
+        let engine = FormulaEngine()
+        let deps = engine.dependencies(from: "A1+B2+C3")
+        #expect(deps.count == 3)
+    }
+
+    @Test func rangeReferences() {
+        let engine = FormulaEngine()
+        let deps = engine.dependencies(from: "SUM(A1:A3)")
+        #expect(deps.count == 2) // A1 and A3 are the refs in the text
+    }
+
+    @Test func noCellReferences() {
+        let engine = FormulaEngine()
+        let deps = engine.dependencies(from: "1+2+3")
+        #expect(deps.count == 0)
+    }
+}
+
+// MARK: - Circular Reference Detection
+
+@Suite("Circular Reference Detection")
+struct CircularReferenceTests {
+    @Test func directCircularReference() {
+        let vm = GridViewModel()
+        // A1 = =B1, B1 = =A1
+        vm.cells[0][0].input = "=B1"
+        vm.cells[0][1].input = "=A1"
+        vm.reevaluateAllCells()
+        #expect(vm.cells[0][0].hasError == true)
+        #expect(vm.cells[0][0].displayValue == "#ERROR")
+        #expect(vm.cells[0][1].hasError == true)
+        #expect(vm.cells[0][1].displayValue == "#ERROR")
+    }
+
+    @Test func selfReference() {
+        let vm = GridViewModel()
+        // A1 = =A1
+        vm.cells[0][0].input = "=A1"
+        vm.reevaluateAllCells()
+        #expect(vm.cells[0][0].hasError == true)
+        #expect(vm.cells[0][0].displayValue == "#ERROR")
+    }
+
+    @Test func indirectCircularReference() {
+        let vm = GridViewModel()
+        // A1 = =B1, B1 = =C1, C1 = =A1
+        vm.cells[0][0].input = "=B1"
+        vm.cells[0][1].input = "=C1"
+        vm.cells[0][2].input = "=A1"
+        vm.reevaluateAllCells()
+        #expect(vm.cells[0][0].hasError == true)
+        #expect(vm.cells[0][1].hasError == true)
+        #expect(vm.cells[0][2].hasError == true)
+    }
+
+    @Test func nonCircularCellsUnaffected() {
+        let vm = GridViewModel()
+        // A1 = =B1, B1 = =A1 (circular), C1 = 42 (not circular)
+        vm.cells[0][0].input = "=B1"
+        vm.cells[0][1].input = "=A1"
+        vm.cells[0][2].input = "42"
+        vm.reevaluateAllCells()
+        #expect(vm.cells[0][2].displayValue == "42")
+        #expect(vm.cells[0][2].hasError == false)
+    }
+
+    @Test func formulaDependingOnCircularShowsError() {
+        let vm = GridViewModel()
+        // A1 = =A1 (circular), B1 depends on A1
+        vm.cells[0][0].input = "=A1"
+        vm.cells[0][1].input = "=A1+1"
+        vm.reevaluateAllCells()
+        #expect(vm.cells[0][0].hasError == true)
+        // B1 depends on a circular cell — it should also error
+        #expect(vm.cells[0][1].hasError == true)
+    }
+}

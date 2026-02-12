@@ -230,6 +230,22 @@ class FormulaEngine {
         }
     }
 
+    /// Extract all cell references from a formula string as (row, col) pairs.
+    func dependencies(from formula: String) -> [(row: Int, col: Int)] {
+        let pattern = "([A-Z]+)([0-9]+)"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
+        let matches = regex.matches(in: formula, options: [], range: NSRange(formula.startIndex..., in: formula))
+        var refs: [(row: Int, col: Int)] = []
+        for match in matches {
+            guard let colRange = Range(match.range(at: 1), in: formula),
+                  let rowRange = Range(match.range(at: 2), in: formula),
+                  let rowNum = Int(String(formula[rowRange])), rowNum > 0 else { continue }
+            let col = columnNameToIndex(String(formula[colRange]))
+            refs.append((rowNum - 1, col))
+        }
+        return refs
+    }
+
     private func formatResult(_ value: Double) -> String {
         // If it's a whole number, display without decimals
         if value.truncatingRemainder(dividingBy: 1) == 0 {

@@ -104,14 +104,77 @@ class GridViewModel: ObservableObject {
     }
 
     func reevaluateAllCells() {
-        for row in 0..<rows {
-            for col in 0..<columns {
-                let cell = cells[row][col]
+        // Build dependency graph and detect circular references
+        typealias CellKey = Int // row * columns + col
+        func key(_ r: Int, _ c: Int) -> CellKey { r * columns + c }
+
+        var deps: [CellKey: [CellKey]] = [:]
+        for r in 0..<rows {
+            for c in 0..<columns {
+                let cell = cells[r][c]
                 if cell.input.hasPrefix("=") {
-                    cell.evaluate(using: formulaEngine, getCellValue: getCellValue)
+                    let formula = String(cell.input.dropFirst())
+                    let refs = formulaEngine.dependencies(from: formula)
+                        .filter { $0.row >= 0 && $0.row < rows && $0.col >= 0 && $0.col < columns }
+                    deps[key(r, c)] = refs.map { key($0.row, $0.col) }
                 }
             }
         }
+
+        // Topological sort with cycle detection (Kahn's algorithm)
+        var inDegree: [CellKey: Int] = [:]
+        var reverseAdj: [CellKey: [CellKey]] = [:] // dependency -> dependents
+        for (cell, cellDeps) in deps {
+            if inDegree[cell] == nil { inDegree[cell] = 0 }
+            for dep in cellDeps {
+                reverseAdj[dep, default: []].append(cell)
+                inDegree[cell, default: 0] += 1
+            }
+        }
+
+        var queue: [CellKey] = []
+        for (cell, degree) in inDegree where degree == 0 {
+            queue.append(cell)
+        }
+        // Also include formula cells with no dependencies
+        for (cell, _) in deps where inDegree[cell, default: 0] == 0 && !queue.contains(cell) {
+            queue.append(cell)
+        }
+
+        var evalOrder: [CellKey] = []
+        var idx = 0
+        while idx < queue.count {
+            let cell = queue[idx]; idx += 1
+            evalOrder.append(cell)
+            for dependent in reverseAdj[cell, default: []] {
+                inDegree[dependent, default: 0] -= 1
+                if inDegree[dependent] == 0 {
+                    queue.append(dependent)
+                }
+            }
+        }
+
+        let circularCells = Set(deps.keys.filter { !evalOrder.contains($0) })
+
+        // Evaluate in topological order
+        for cellKey in evalOrder {
+            let r = cellKey / columns, c = cellKey % columns
+            cells[r][c].evaluate(using: formulaEngine, getCellValue: getCellValue)
+        }
+
+        // Also evaluate non-formula cells and plain values
+        for r in 0..<rows {
+            for c in 0..<columns {
+                let cell = cells[r][c]
+                if circularCells.contains(key(r, c)) {
+                    cell.displayValue = "#ERROR"
+                    cell.hasError = true
+                } else if !cell.input.hasPrefix("=") && !cell.input.isEmpty {
+                    cell.displayValue = cell.input
+                }
+            }
+        }
+
         objectWillChange.send()
     }
 
