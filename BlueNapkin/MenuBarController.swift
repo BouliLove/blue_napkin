@@ -58,7 +58,7 @@ class MenuBarController: NSObject, ObservableObject {
     private func setupPanel() {
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: NSSize(width: 600, height: 400)),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
