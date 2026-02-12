@@ -1,6 +1,6 @@
 # BlueNapkin
 
-When you want to quickly work something with formulas, but don't want to open up a new GSheet or Excel file: meet BlueNapkin.
+When you want to quickly work out something with formulas, but don't want to open up a new GSheet or Excel file: meet Blue Napkin.
 A fast, lightweight macOS menu bar spreadsheet with Excel-like formula support.
 
 I have been using Numi, a calculator living in my navbar since 2015, and it inspired me the same thing, but for table calculations.
@@ -15,7 +15,7 @@ I have been using Numi, a calculator living in my navbar since 2015, and it insp
 - **Formula bar** — shows the raw formula of the selected cell at the bottom
 - **Copy/paste** — Cmd+C/V/X, with multi-cell TSV paste support
 - **Data persistence** — cell data saved to UserDefaults, survives app restarts
-- **Launch at login** — auto-starts with your Mac, like Numi
+- **Launch at login** — auto-starts with your Mac
 - **Performance optimized** — Equatable views, value-type props, only changed cells re-render
 - **Dark mode** — follows system appearance
 
@@ -52,7 +52,7 @@ pkill -f BlueNapkin; swift build && .build/debug/BlueNapkin &
 swift test
 ```
 
-47 tests covering the formula engine, cell references, and cell model.
+61 tests covering the formula engine, cell references, and cell model.
 
 ## Keyboard Shortcuts
 
