@@ -1,4 +1,15 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Cursor Modifier
+
+extension View {
+    func cursor(_ cursor: NSCursor) -> some View {
+        self.onHover { inside in
+            if inside { cursor.push() } else { NSCursor.pop() }
+        }
+    }
+}
 
 enum EditAction {
     case commit
@@ -291,13 +302,27 @@ struct GridView: View {
     @State private var formulaRefLength: Int = 0
     @State private var formulaBarText: String = ""
 
-    let cellWidth: CGFloat = 80
+    @State private var columnWidths: [CGFloat] = []
+    let defaultCellWidth: CGFloat = 80
+    let minCellWidth: CGFloat = 40
     let cellHeight: CGFloat = 30
     let headerWidth: CGFloat = 40
     let headerHeight: CGFloat = 30
+    @State private var dragColumnIndex: Int? = nil
+    @State private var dragStartWidth: CGFloat = 0
 
     private var activeCell: (row: Int, col: Int)? {
         currentEditingCell ?? selectedCell
+    }
+
+    private func colWidth(_ col: Int) -> CGFloat {
+        col < columnWidths.count ? columnWidths[col] : defaultCellWidth
+    }
+
+    private func colX(_ col: Int) -> CGFloat {
+        var x = headerWidth
+        for c in 0..<col { x += colWidth(c) }
+        return x
     }
 
     var body: some View {
@@ -317,13 +342,33 @@ struct GridView: View {
                         Text(columnName(col))
                             .font(.system(size: 10, weight: .medium, design: .default))
                             .foregroundColor(.secondary)
-                            .frame(width: cellWidth, height: headerHeight)
+                            .frame(width: colWidth(col), height: headerHeight)
                             .background(Color(NSColor.windowBackgroundColor))
                             .overlay(alignment: .bottom) {
                                 Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
                             }
                             .overlay(alignment: .trailing) {
-                                Color(NSColor.separatorColor).opacity(0.3).frame(width: 0.5)
+                                // Drag handle for column resizing
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(width: 6)
+                                    .contentShape(Rectangle())
+                                    .cursor(.resizeLeftRight)
+                                    .gesture(
+                                        DragGesture(minimumDistance: 1)
+                                            .onChanged { value in
+                                                if dragColumnIndex == nil {
+                                                    dragColumnIndex = col
+                                                    dragStartWidth = colWidth(col)
+                                                }
+                                                let newWidth = max(minCellWidth, dragStartWidth + value.translation.width)
+                                                columnWidths[col] = newWidth
+                                            }
+                                            .onEnded { _ in
+                                                dragColumnIndex = nil
+                                            }
+                                    )
+                                    .overlay(Color(NSColor.separatorColor).opacity(0.3).frame(width: 0.5))
                             }
                     }
                 }
@@ -404,7 +449,7 @@ struct GridView: View {
                                 }
                             )
                             .equatable()
-                            .frame(width: cellWidth, height: cellHeight)
+                            .frame(width: colWidth(col), height: cellHeight)
                             .zIndex(currentEditingCell?.row == row && currentEditingCell?.col == col ? 1 : 0)
                         }
                     }
@@ -465,7 +510,12 @@ struct GridView: View {
             .frame(height: 26)
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .onAppear { installEventMonitor() }
+        .onAppear {
+            if columnWidths.isEmpty {
+                columnWidths = Array(repeating: defaultCellWidth, count: viewModel.columns)
+            }
+            installEventMonitor()
+        }
         .onDisappear { removeEventMonitor() }
     }
 
@@ -752,8 +802,17 @@ struct GridView: View {
     // MARK: - Formula Reference Selection
 
     private func cellAt(location: CGPoint) -> (row: Int, col: Int)? {
-        let col = Int((location.x - headerWidth) / cellWidth)
         let row = Int((location.y - headerHeight) / cellHeight)
+        var x = headerWidth
+        var col = -1
+        for c in 0..<viewModel.columns {
+            let w = colWidth(c)
+            if location.x >= x && location.x < x + w {
+                col = c
+                break
+            }
+            x += w
+        }
         guard row >= 0, row < viewModel.rows, col >= 0, col < viewModel.columns else { return nil }
         return (row, col)
     }
