@@ -69,6 +69,13 @@ class SelectionState: ObservableObject {
     }
 }
 
+struct CellChange {
+    let row: Int
+    let col: Int
+    let oldInput: String
+    let newInput: String
+}
+
 class GridViewModel: ObservableObject {
     @Published var cells: [[CellModel]] = []
     let formulaEngine = FormulaEngine()
@@ -77,6 +84,63 @@ class GridViewModel: ObservableObject {
     let columns = 10
 
     private static let storageKey = "BlueNapkin.gridData"
+
+    // MARK: - Undo/Redo
+
+    var undoStack: [[CellChange]] = []
+    var redoStack: [[CellChange]] = []
+    private var pendingChanges: [CellChange] = []
+
+    /// Begin recording a group of changes (e.g. multi-cell paste/delete).
+    func beginChangeGroup() { pendingChanges = [] }
+
+    /// Record a single cell change. Call before modifying the cell's input.
+    func recordCellChange(row: Int, col: Int) {
+        pendingChanges.append(CellChange(row: row, col: col, oldInput: cells[row][col].input, newInput: ""))
+    }
+
+    /// Finalize the change group after modifications are applied.
+    func commitChangeGroup() {
+        let changes = pendingChanges.map { change in
+            CellChange(row: change.row, col: change.col, oldInput: change.oldInput, newInput: cells[change.row][change.col].input)
+        }.filter { $0.oldInput != $0.newInput }
+        if !changes.isEmpty {
+            undoStack.append(changes)
+            redoStack.removeAll()
+        }
+        pendingChanges = []
+    }
+
+    /// Convenience: record a single cell change, apply a closure, and commit.
+    func withUndo(row: Int, col: Int, apply: () -> Void) {
+        beginChangeGroup()
+        recordCellChange(row: row, col: col)
+        apply()
+        commitChangeGroup()
+    }
+
+    func undo() {
+        guard let changes = undoStack.popLast() else { return }
+        for change in changes {
+            cells[change.row][change.col].input = change.oldInput
+        }
+        redoStack.append(changes)
+        reevaluateAllCells()
+        save()
+    }
+
+    func redo() {
+        guard let changes = redoStack.popLast() else { return }
+        for change in changes {
+            cells[change.row][change.col].input = change.newInput
+        }
+        undoStack.append(changes)
+        reevaluateAllCells()
+        save()
+    }
+
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
 
     init() {
         for row in 0..<rows {
@@ -169,8 +233,9 @@ class GridViewModel: ObservableObject {
                 if circularCells.contains(key(r, c)) {
                     cell.displayValue = "#ERROR"
                     cell.hasError = true
-                } else if !cell.input.hasPrefix("=") && !cell.input.isEmpty {
+                } else if !cell.input.hasPrefix("=") {
                     cell.displayValue = cell.input
+                    cell.hasError = false
                 }
             }
         }
@@ -290,6 +355,11 @@ struct GridView: View {
                                 ),
                                 onFinishEditing: { action in
                                     if action != .cancel {
+                                        let newInput = viewModel.cells[row][col].input
+                                        if originalEditInput != newInput {
+                                            viewModel.undoStack.append([CellChange(row: row, col: col, oldInput: originalEditInput, newInput: newInput)])
+                                            viewModel.redoStack.removeAll()
+                                        }
                                         viewModel.updateCell(at: row, column: col)
                                     } else {
                                         viewModel.cells[row][col].input = originalEditInput
@@ -431,6 +501,14 @@ struct GridView: View {
                     selectionState.updateSelection(to: viewModel.rows - 1, col: viewModel.columns - 1)
                     return nil
                 }
+                if event.charactersIgnoringModifiers == "z" {
+                    if shift {
+                        viewModel.redo()
+                    } else {
+                        viewModel.undo()
+                    }
+                    return nil
+                }
                 guard let selected = selectedCell else { return event }
                 switch event.charactersIgnoringModifiers {
                 case "c":
@@ -506,20 +584,25 @@ struct GridView: View {
             case 51, 117: // Delete/Backspace, Forward Delete
                 if selectionState.selectionStart != nil {
                     // Clear all cells in selection range
+                    viewModel.beginChangeGroup()
                     for r in 0..<viewModel.rows {
                         for c in 0..<viewModel.columns {
                             if selectionState.isInSelection(row: r, col: c) {
+                                viewModel.recordCellChange(row: r, col: c)
                                 viewModel.cells[r][c].input = ""
                                 viewModel.cells[r][c].displayValue = ""
                                 viewModel.cells[r][c].hasError = false
                             }
                         }
                     }
+                    viewModel.commitChangeGroup()
                     selectionState.clearSelection()
                     viewModel.reevaluateAllCells()
                     viewModel.save()
                 } else if let selected = selectedCell {
-                    viewModel.cells[selected.row][selected.col].input = ""
+                    viewModel.withUndo(row: selected.row, col: selected.col) {
+                        viewModel.cells[selected.row][selected.col].input = ""
+                    }
                     viewModel.updateCell(at: selected.row, column: selected.col)
                 }
                 return nil
@@ -563,28 +646,35 @@ struct GridView: View {
         if rows.count > 1 || rows.first?.contains("\t") == true {
             pasteMultiCell(content: rows, startRow: row, startCol: col)
         } else {
-            viewModel.cells[row][col].input = content
+            viewModel.withUndo(row: row, col: col) {
+                viewModel.cells[row][col].input = content
+            }
             viewModel.updateCell(at: row, column: col)
         }
     }
 
     private func pasteMultiCell(content: [String], startRow: Int, startCol: Int) {
+        viewModel.beginChangeGroup()
         for (rowOffset, line) in content.enumerated() {
             let columns = line.components(separatedBy: "\t")
             for (colOffset, value) in columns.enumerated() {
                 let targetRow = startRow + rowOffset
                 let targetCol = startCol + colOffset
                 guard targetRow < viewModel.rows, targetCol < viewModel.columns else { continue }
+                viewModel.recordCellChange(row: targetRow, col: targetCol)
                 viewModel.cells[targetRow][targetCol].input = value
             }
         }
+        viewModel.commitChangeGroup()
         viewModel.reevaluateAllCells()
         viewModel.save()
     }
 
     private func cutCell(row: Int, col: Int) {
         copyCell(row: row, col: col)
-        viewModel.cells[row][col].input = ""
+        viewModel.withUndo(row: row, col: col) {
+            viewModel.cells[row][col].input = ""
+        }
         viewModel.updateCell(at: row, column: col)
     }
 
@@ -609,6 +699,11 @@ struct GridView: View {
                 }
                 updateFormulaReference()
             } else if !(editingCell.row == row && editingCell.col == col) {
+                let newInput = viewModel.cells[editingCell.row][editingCell.col].input
+                if originalEditInput != newInput {
+                    viewModel.undoStack.append([CellChange(row: editingCell.row, col: editingCell.col, oldInput: originalEditInput, newInput: newInput)])
+                    viewModel.redoStack.removeAll()
+                }
                 viewModel.updateCell(at: editingCell.row, column: editingCell.col)
                 currentEditingCell = nil
                 formulaBarText = ""

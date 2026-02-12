@@ -610,3 +610,94 @@ struct CircularReferenceTests {
         #expect(vm.cells[0][1].hasError == true)
     }
 }
+
+// MARK: - Undo/Redo
+
+@Suite("Undo/Redo")
+struct UndoRedoTests {
+    @Test func undoSingleCellChange() {
+        let vm = GridViewModel()
+        vm.withUndo(row: 0, col: 0) {
+            vm.cells[0][0].input = "hello"
+        }
+        vm.updateCell(at: 0, column: 0)
+        #expect(vm.cells[0][0].displayValue == "hello")
+        vm.undo()
+        #expect(vm.cells[0][0].input == "")
+        #expect(vm.cells[0][0].displayValue == "")
+    }
+
+    @Test func redoAfterUndo() {
+        let vm = GridViewModel()
+        vm.withUndo(row: 0, col: 0) {
+            vm.cells[0][0].input = "42"
+        }
+        vm.updateCell(at: 0, column: 0)
+        vm.undo()
+        #expect(vm.cells[0][0].input == "")
+        vm.redo()
+        #expect(vm.cells[0][0].input == "42")
+        #expect(vm.cells[0][0].displayValue == "42")
+    }
+
+    @Test func multipleUndos() {
+        let vm = GridViewModel()
+        vm.withUndo(row: 0, col: 0) {
+            vm.cells[0][0].input = "first"
+        }
+        vm.updateCell(at: 0, column: 0)
+        vm.withUndo(row: 0, col: 0) {
+            vm.cells[0][0].input = "second"
+        }
+        vm.updateCell(at: 0, column: 0)
+        #expect(vm.cells[0][0].displayValue == "second")
+        vm.undo()
+        #expect(vm.cells[0][0].displayValue == "first")
+        vm.undo()
+        #expect(vm.cells[0][0].displayValue == "")
+    }
+
+    @Test func undoMultiCellDelete() {
+        let vm = GridViewModel()
+        vm.cells[0][0].input = "A"
+        vm.cells[0][1].input = "B"
+        vm.reevaluateAllCells()
+        // Simulate multi-cell delete
+        vm.beginChangeGroup()
+        vm.recordCellChange(row: 0, col: 0)
+        vm.cells[0][0].input = ""
+        vm.recordCellChange(row: 0, col: 1)
+        vm.cells[0][1].input = ""
+        vm.commitChangeGroup()
+        vm.reevaluateAllCells()
+        #expect(vm.cells[0][0].input == "")
+        #expect(vm.cells[0][1].input == "")
+        vm.undo()
+        #expect(vm.cells[0][0].input == "A")
+        #expect(vm.cells[0][1].input == "B")
+    }
+
+    @Test func newChangeClearsRedoStack() {
+        let vm = GridViewModel()
+        vm.withUndo(row: 0, col: 0) {
+            vm.cells[0][0].input = "first"
+        }
+        vm.updateCell(at: 0, column: 0)
+        vm.undo()
+        #expect(vm.canRedo == true)
+        // New change should clear redo stack
+        vm.withUndo(row: 0, col: 0) {
+            vm.cells[0][0].input = "different"
+        }
+        vm.updateCell(at: 0, column: 0)
+        #expect(vm.canRedo == false)
+    }
+
+    @Test func undoOnEmptyStackDoesNothing() {
+        let vm = GridViewModel()
+        vm.cells[0][0].input = "keep"
+        vm.reevaluateAllCells()
+        vm.undo() // Should be no-op
+        #expect(vm.cells[0][0].input == "keep")
+    }
+}

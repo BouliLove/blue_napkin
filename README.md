@@ -52,7 +52,7 @@ pkill -f BlueNapkin; swift build && .build/debug/BlueNapkin &
 swift test
 ```
 
-61 tests covering the formula engine, cell references, and cell model.
+76 tests covering the formula engine, cell references, and cell model.
 
 ## Keyboard Shortcuts
 
