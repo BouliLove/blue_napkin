@@ -275,10 +275,15 @@ struct GridView: View {
             }
             .coordinateSpace(name: "gridContent")
             .overlay {
-                // Drag overlay for formula range selection
+                // Drag and tap overlay for formula range selection
                 if currentEditingCell != nil {
                     Color.clear
                         .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            if let cell = cellAt(location: location) {
+                                handleCellClick(row: cell.row, col: cell.col)
+                            }
+                        }
                         .gesture(
                             DragGesture(minimumDistance: 5, coordinateSpace: .named("gridContent"))
                                 .onChanged { value in
