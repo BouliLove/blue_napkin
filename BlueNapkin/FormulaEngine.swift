@@ -31,29 +31,36 @@ class FormulaEngine {
     private func processFunctions(formula: String, getCellValue: @escaping (Int, Int) -> String) throws -> String {
         var result = formula
 
-        // Match function calls like SUM(A1:A10), AVERAGE(B1:B5), MIN(A1:A3), etc.
-        let pattern = "(SUM|PRODUCT|AVERAGE|MIN|MAX|COUNT|ROUND|ABS)\\s*\\(([^)]+)\\)"
-        let regex = try NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+        // Match innermost function calls (args contain no parentheses)
+        let pattern = "(SUM|PRODUCT|AVERAGE|MIN|MAX|COUNT|ROUND|ABS)\\s*\\(([^()]+)\\)"
 
-        // Process functions in reverse order to maintain string indices
-        let matches = regex.matches(in: result, options: [], range: NSRange(result.startIndex..., in: result))
-
-        for match in matches.reversed() {
-            guard let functionRange = Range(match.range(at: 1), in: result),
-                  let argsRange = Range(match.range(at: 2), in: result) else {
-                continue
+        // Iteratively resolve innermost function calls until none remain
+        while true {
+            // Simplify redundant nested parentheses: ((expr)) → (expr)
+            while let range = result.range(of: "\\(\\(([^()]*)\\)\\)", options: .regularExpression) {
+                let matched = String(result[range])
+                result.replaceSubrange(range, with: String(matched.dropFirst().dropLast()))
             }
 
-            let functionName = String(result[functionRange]).uppercased()
-            let args = String(result[argsRange])
+            let regex = try NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+            let matches = regex.matches(in: result, options: [], range: NSRange(result.startIndex..., in: result))
 
-            // Evaluate the function
-            let functionResult = try evaluateFunction(functionName: functionName, args: args, getCellValue: getCellValue)
+            if matches.isEmpty { break }
 
-            // Replace the function call with the result
-            let fullRange = match.range
-            if let swiftRange = Range(fullRange, in: result) {
-                result.replaceSubrange(swiftRange, with: String(functionResult))
+            for match in matches.reversed() {
+                guard let functionRange = Range(match.range(at: 1), in: result),
+                      let argsRange = Range(match.range(at: 2), in: result) else {
+                    continue
+                }
+
+                let functionName = String(result[functionRange]).uppercased()
+                let args = String(result[argsRange])
+                let functionResult = try evaluateFunction(functionName: functionName, args: args, getCellValue: getCellValue)
+
+                let fullRange = match.range
+                if let swiftRange = Range(fullRange, in: result) {
+                    result.replaceSubrange(swiftRange, with: String(functionResult))
+                }
             }
         }
 
@@ -61,15 +68,23 @@ class FormulaEngine {
     }
 
     private func evaluateFunction(functionName: String, args: String, getCellValue: @escaping (Int, Int) -> String) throws -> Double {
-        // Split on semicolons (for ROUND's second arg) then commas within each part
-        let semiParts = args.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+        // Normalize separators: treat semicolons as commas
+        let normalizedArgs = args.replacingOccurrences(of: ";", with: ",")
+        let argList = normalizedArgs.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
 
-        // Parse the main arguments (first semicolon segment, or all if no semicolons)
-        let mainArgs = semiParts[0]
-        let argList = mainArgs.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        // For ROUND, the last argument is the number of decimal places
+        let mainArgList: [String]
+        var roundPrecision: Int = 0
+        if functionName == "ROUND" && argList.count > 1 {
+            mainArgList = Array(argList.dropLast())
+            roundPrecision = Int(argList.last!) ?? 0
+        } else {
+            mainArgList = Array(argList)
+        }
+
         var values: [Double] = []
 
-        for arg in argList {
+        for arg in mainArgList {
             if arg.contains(":") {
                 let rangeValues = try parseRange(range: arg, getCellValue: getCellValue)
                 values.append(contentsOf: rangeValues)
@@ -103,8 +118,7 @@ class FormulaEngine {
             return abs(first)
         case "ROUND":
             guard let first = values.first else { return 0 }
-            let places = semiParts.count > 1 ? (Int(semiParts[1].trimmingCharacters(in: .whitespaces)) ?? 0) : 0
-            let multiplier = pow(10.0, Double(places))
+            let multiplier = pow(10.0, Double(roundPrecision))
             return (first * multiplier).rounded() / multiplier
         default:
             throw FormulaError.invalidFunction

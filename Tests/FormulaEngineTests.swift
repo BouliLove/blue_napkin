@@ -838,3 +838,72 @@ struct RoundTests {
         #expect(try grid.eval("ROUND(-2.5)") == "-3")
     }
 }
+
+@Suite("Nested Functions")
+struct NestedFunctionTests {
+    @Test func minOfSumAndProduct() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "2")
+        grid.set("A", 2, "3")
+        grid.set("B", 1, "4")
+        grid.set("B", 2, "5")
+        // SUM(A1:A2) = 5, PRODUCT(B1:B2) = 20 → MIN = 5
+        #expect(try grid.eval("MIN(SUM(A1:A2);PRODUCT(B1:B2))") == "5")
+    }
+
+    @Test func minOfSumAndProductWithExtraParens() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "2")
+        grid.set("A", 2, "3")
+        grid.set("B", 1, "4")
+        grid.set("B", 2, "5")
+        // Extra parens like user's example: =MIN((SUM(A2:B4);PRODUCT(C2:D4))
+        // After auto-close: MIN((SUM(A1:A2);PRODUCT(B1:B2)))
+        #expect(try grid.eval("MIN((SUM(A1:A2);PRODUCT(B1:B2)))") == "5")
+    }
+
+    @Test func sumOfMinAndMax() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "10")
+        grid.set("A", 2, "20")
+        grid.set("B", 1, "30")
+        grid.set("B", 2, "40")
+        // MIN(A1;A2) = 10, MAX(B1;B2) = 40 → SUM = 50
+        #expect(try grid.eval("SUM(MIN(A1;A2);MAX(B1;B2))") == "50")
+    }
+
+    @Test func threeLevelNesting() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "-7")
+        grid.set("A", 2, "3")
+        // ABS(MIN(A1;A2)) → ABS(-7) = 7
+        #expect(try grid.eval("ABS(MIN(A1;A2))") == "7")
+    }
+
+    @Test func nestedFunctionPlusArithmetic() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "1")
+        grid.set("A", 2, "2")
+        grid.set("B", 1, "10")
+        grid.set("B", 2, "20")
+        // SUM(A1:A2) + MIN(B1;B2) = 3 + 10 = 13
+        #expect(try grid.eval("SUM(A1:A2)+MIN(B1;B2)") == "13")
+    }
+
+    @Test func semicolonAsSeparator() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "5")
+        grid.set("A", 2, "3")
+        grid.set("A", 3, "8")
+        // Semicolons as separators for MIN without nesting
+        #expect(try grid.eval("MIN(A1;A2;A3)") == "3")
+    }
+
+    @Test func roundNestedFunction() throws {
+        var grid = TestGrid()
+        grid.set("A", 1, "1.111")
+        grid.set("A", 2, "2.222")
+        // ROUND(SUM(A1:A2);1) → ROUND(3.333;1) = 3.3
+        #expect(try grid.eval("ROUND(SUM(A1:A2);1)") == "3.3")
+    }
+}
