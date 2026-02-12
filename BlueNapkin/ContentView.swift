@@ -20,6 +20,56 @@ struct WindowDragArea: NSViewRepresentable {
     }
 }
 
+/// Invisible resize handle at a window corner. Drag to resize.
+struct WindowResizeHandle: NSViewRepresentable {
+    enum Corner { case bottomLeft, bottomRight }
+    let corner: Corner
+
+    func makeNSView(context: Context) -> NSView { ResizeView(corner: corner) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private class ResizeView: NSView {
+        let corner: Corner
+        private var initialFrame: NSRect = .zero
+        private var initialMouse: NSPoint = .zero
+
+        init(corner: Corner) {
+            self.corner = corner
+            super.init(frame: .zero)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let window = window else { return }
+            initialFrame = window.frame
+            initialMouse = NSEvent.mouseLocation
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let window = window else { return }
+            let mouse = NSEvent.mouseLocation
+            let dx = mouse.x - initialMouse.x
+            let dy = mouse.y - initialMouse.y
+
+            var frame = initialFrame
+            let newH = max(window.minSize.height, min(window.maxSize.height, initialFrame.height - dy))
+            frame.origin.y = initialFrame.maxY - newH
+            frame.size.height = newH
+
+            switch corner {
+            case .bottomRight:
+                frame.size.width = max(window.minSize.width, min(window.maxSize.width, initialFrame.width + dx))
+            case .bottomLeft:
+                let newW = max(window.minSize.width, min(window.maxSize.width, initialFrame.width - dx))
+                frame.origin.x = initialFrame.maxX - newW
+                frame.size.width = newW
+            }
+
+            window.setFrame(frame, display: true, animate: false)
+        }
+    }
+}
+
 struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
@@ -72,6 +122,16 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5)
         )
+        .overlay(alignment: .bottomLeading) {
+            WindowResizeHandle(corner: .bottomLeft)
+                .frame(width: 16, height: 16)
+                .cursor(.resizeUpDown)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            WindowResizeHandle(corner: .bottomRight)
+                .frame(width: 16, height: 16)
+                .cursor(.resizeUpDown)
+        }
     }
 }
 
