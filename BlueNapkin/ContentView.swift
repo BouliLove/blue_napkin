@@ -1,6 +1,10 @@
 import SwiftUI
 import AppKit
 
+extension Notification.Name {
+    static let exportCSV = Notification.Name("BlueNapkin.exportCSV")
+}
+
 /// Transparent view that enables window dragging when placed in the title bar.
 struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
@@ -30,6 +34,16 @@ struct ContentView: View {
                         .padding(.leading, 12)
 
                     Spacer()
+
+                    Button(action: {
+                        NotificationCenter.default.post(name: .exportCSV, object: nil)
+                    }) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Export CSV (⌘E)")
 
                     Button(action: {
                         NSApplication.shared.keyWindow?.orderOut(nil)

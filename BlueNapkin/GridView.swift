@@ -157,6 +157,37 @@ class GridViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 
+    /// Build CSV string from the grid, trimming empty trailing rows/columns.
+    func exportCSV() -> String {
+        // Find the bounding box of non-empty cells
+        var maxRow = -1, maxCol = -1
+        for r in 0..<rows {
+            for c in 0..<columns {
+                if !cells[r][c].input.isEmpty {
+                    maxRow = max(maxRow, r)
+                    maxCol = max(maxCol, c)
+                }
+            }
+        }
+        guard maxRow >= 0, maxCol >= 0 else { return "" }
+
+        var lines: [String] = []
+        for r in 0...maxRow {
+            var fields: [String] = []
+            for c in 0...maxCol {
+                let value = cells[r][c].displayValue
+                // Quote fields that contain commas, quotes, or newlines
+                if value.contains(",") || value.contains("\"") || value.contains("\n") {
+                    fields.append("\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\"")
+                } else {
+                    fields.append(value)
+                }
+            }
+            lines.append(fields.joined(separator: ","))
+        }
+        return lines.joined(separator: "\n")
+    }
+
     init() {
         for row in 0..<rows {
             var rowCells: [CellModel] = []
@@ -517,6 +548,9 @@ struct GridView: View {
             installEventMonitor()
         }
         .onDisappear { removeEventMonitor() }
+        .onReceive(NotificationCenter.default.publisher(for: .exportCSV)) { _ in
+            exportCSV()
+        }
     }
 
     // MARK: - Keyboard Event Monitor
@@ -561,6 +595,10 @@ struct GridView: View {
                     } else {
                         viewModel.undo()
                     }
+                    return nil
+                }
+                if event.charactersIgnoringModifiers == "e" {
+                    exportCSV()
                     return nil
                 }
                 guard let selected = selectedCell else { return event }
@@ -730,6 +768,21 @@ struct GridView: View {
             viewModel.cells[row][col].input = ""
         }
         viewModel.updateCell(at: row, column: col)
+    }
+
+    // MARK: - CSV Export
+
+    private func exportCSV() {
+        let csv = viewModel.exportCSV()
+        guard !csv.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "BlueNapkin.csv"
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                try? csv.write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
     }
 
     // MARK: - Cell Click Handling
