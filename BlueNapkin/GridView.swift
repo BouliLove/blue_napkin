@@ -87,6 +87,13 @@ struct CellChange {
     let newInput: String
 }
 
+enum CellFormat: String, Codable {
+    case currencyEUR
+    case currencyUSD
+    case number
+    case percentage
+}
+
 class GridViewModel: ObservableObject {
     @Published var cells: [[CellModel]] = []
     let formulaEngine = FormulaEngine()
@@ -95,6 +102,51 @@ class GridViewModel: ObservableObject {
     let columns = 10
 
     private static let storageKey = "BlueNapkin.gridData"
+    private static let formatsKey = "BlueNapkin.cellFormats"
+
+    // MARK: - Cell Formatting
+
+    var cellFormats: [String: CellFormat] = [:]
+
+    func toggleCellFormat(row: Int, col: Int, format: CellFormat) {
+        let key = "\(row),\(col)"
+        if cellFormats[key] == format {
+            cellFormats.removeValue(forKey: key)
+        } else {
+            cellFormats[key] = format
+        }
+        saveFormats()
+        objectWillChange.send()
+    }
+
+    func formattedDisplayValue(row: Int, col: Int) -> String {
+        let raw = cells[row][col].displayValue
+        guard let format = cellFormats["\(row),\(col)"],
+              let value = Double(raw) else { return raw }
+
+        let formatter = NumberFormatter()
+        formatter.groupingSeparator = ","
+        formatter.decimalSeparator = "."
+
+        switch format {
+        case .currencyEUR:
+            formatter.numberStyle = .decimal
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = 2
+            return "€" + (formatter.string(from: NSNumber(value: value)) ?? raw)
+        case .currencyUSD:
+            formatter.numberStyle = .decimal
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = 2
+            return "$" + (formatter.string(from: NSNumber(value: value)) ?? raw)
+        case .number:
+            formatter.numberStyle = .decimal
+            formatter.maximumFractionDigits = 6
+            return formatter.string(from: NSNumber(value: value)) ?? raw
+        case .percentage:
+            return raw + "%"
+        }
+    }
 
     // MARK: - Undo/Redo
 
@@ -155,6 +207,7 @@ class GridViewModel: ObservableObject {
 
     static func clearStorage() {
         UserDefaults.standard.removeObject(forKey: storageKey)
+        UserDefaults.standard.removeObject(forKey: formatsKey)
     }
 
     /// Build CSV string from the grid, trimming empty trailing rows/columns.
@@ -315,19 +368,26 @@ class GridViewModel: ObservableObject {
         UserDefaults.standard.set(data, forKey: Self.storageKey)
     }
 
+    private func saveFormats() {
+        let data = cellFormats.mapValues { $0.rawValue }
+        UserDefaults.standard.set(data, forKey: Self.formatsKey)
+    }
+
     private func load() {
-        guard let data = UserDefaults.standard.dictionary(forKey: Self.storageKey) as? [String: String] else {
-            return
-        }
-        for (key, input) in data {
-            let parts = key.split(separator: ",")
-            guard parts.count == 2,
-                  let row = Int(parts[0]),
-                  let col = Int(parts[1]),
-                  row >= 0, row < rows, col >= 0, col < columns else {
-                continue
+        if let data = UserDefaults.standard.dictionary(forKey: Self.storageKey) as? [String: String] {
+            for (key, input) in data {
+                let parts = key.split(separator: ",")
+                guard parts.count == 2,
+                      let row = Int(parts[0]),
+                      let col = Int(parts[1]),
+                      row >= 0, row < rows, col >= 0, col < columns else {
+                    continue
+                }
+                cells[row][col].input = input
             }
-            cells[row][col].input = input
+        }
+        if let formatData = UserDefaults.standard.dictionary(forKey: Self.formatsKey) as? [String: String] {
+            cellFormats = formatData.compactMapValues { CellFormat(rawValue: $0) }
         }
         reevaluateAllCells()
     }
@@ -430,7 +490,7 @@ struct GridView: View {
 
                         ForEach(0..<viewModel.columns, id: \.self) { col in
                             CellView(
-                                displayValue: viewModel.cells[row][col].displayValue,
+                                displayValue: viewModel.formattedDisplayValue(row: row, col: col),
                                 hasError: viewModel.cells[row][col].hasError,
                                 row: row,
                                 col: col,
@@ -562,6 +622,13 @@ struct GridView: View {
         .onDisappear { removeEventMonitor() }
         .onReceive(NotificationCenter.default.publisher(for: .exportCSV)) { _ in
             exportCSV()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .setCellFormat)) { notification in
+            if let formatStr = notification.userInfo?["format"] as? String,
+               let format = CellFormat(rawValue: formatStr),
+               let cell = selectedCell ?? currentEditingCell {
+                viewModel.toggleCellFormat(row: cell.row, col: cell.col, format: format)
+            }
         }
     }
 

@@ -3,6 +3,7 @@ import AppKit
 
 extension Notification.Name {
     static let exportCSV = Notification.Name("BlueNapkin.exportCSV")
+    static let setCellFormat = Notification.Name("BlueNapkin.setCellFormat")
 }
 
 /// Transparent view that enables window dragging when placed in the title bar.
@@ -84,6 +85,25 @@ struct ContentView: View {
                         .padding(.leading, 12)
 
                     Spacer()
+
+                    HStack(spacing: 3) {
+                        ForEach([("€", "currencyEUR"), ("$", "currencyUSD"), ("1,0", "number"), ("%", "percentage")], id: \.0) { label, format in
+                            Button(action: {
+                                NotificationCenter.default.post(name: .setCellFormat, object: nil, userInfo: ["format": format])
+                            }) {
+                                Text(label)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .help(format.replacingOccurrences(of: "currency", with: ""))
+                        }
+                    }
+                    .padding(.trailing, 6)
 
                     Button(action: {
                         NotificationCenter.default.post(name: .exportCSV, object: nil)
