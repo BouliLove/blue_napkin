@@ -342,6 +342,7 @@ struct GridView: View {
     @State private var originalEditInput: String = ""
     @State private var formulaRefStart: Int?
     @State private var formulaRefLength: Int = 0
+    @State private var hoveredFunction: String?
     @State private var formulaBarText: String = ""
 
     @State private var columnWidths: [CGFloat] = []
@@ -968,10 +969,36 @@ struct GridView: View {
         viewModel.objectWillChange.send()
     }
 
+    private let functionNames = ["SUM", "AVERAGE", "MIN", "MAX", "COUNT", "PRODUCT", "ROUND", "ABS"]
+
     private var tipText: some View {
-        Text("SUM  AVERAGE  MIN  MAX  COUNT  PRODUCT  ROUND  ABS")
-            .font(.system(size: 10, design: .monospaced))
-            .foregroundColor(Color(NSColor.tertiaryLabelColor))
+        HStack(spacing: 8) {
+            ForEach(functionNames, id: \.self) { name in
+                Text(name)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(hoveredFunction == name ? .accentColor : Color(NSColor.tertiaryLabelColor))
+                    .onHover { isHovering in
+                        hoveredFunction = isHovering ? name : nil
+                        if isHovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                    }
+                    .onTapGesture { insertFunction(name) }
+            }
+        }
+    }
+
+    private func insertFunction(_ name: String) {
+        if let editing = currentEditingCell {
+            let cell = viewModel.cells[editing.row][editing.col]
+            cell.input = "=\(name)("
+            formulaBarText = cell.input
+            viewModel.objectWillChange.send()
+        } else if let selected = selectedCell {
+            originalEditInput = viewModel.cells[selected.row][selected.col].input
+            viewModel.cells[selected.row][selected.col].input = "=\(name)("
+            currentEditingCell = selected
+            formulaBarText = "=\(name)("
+            selectionState.clearSelection()
+        }
     }
 
     private func columnName(_ index: Int) -> String {
