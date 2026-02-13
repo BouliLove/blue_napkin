@@ -624,9 +624,19 @@ struct GridView: View {
             exportCSV()
         }
         .onReceive(NotificationCenter.default.publisher(for: .setCellFormat)) { notification in
-            if let formatStr = notification.userInfo?["format"] as? String,
-               let format = CellFormat(rawValue: formatStr),
-               let cell = selectedCell ?? currentEditingCell {
+            guard let formatStr = notification.userInfo?["format"] as? String,
+                  let format = CellFormat(rawValue: formatStr) else { return }
+            if let start = selectionState.selectionStart, let end = selectionState.selectionEnd {
+                let minRow = min(start.row, end.row)
+                let maxRow = max(start.row, end.row)
+                let minCol = min(start.col, end.col)
+                let maxCol = max(start.col, end.col)
+                for r in minRow...maxRow {
+                    for c in minCol...maxCol {
+                        viewModel.toggleCellFormat(row: r, col: c, format: format)
+                    }
+                }
+            } else if let cell = selectedCell ?? currentEditingCell {
                 viewModel.toggleCellFormat(row: cell.row, col: cell.col, format: format)
             }
         }
