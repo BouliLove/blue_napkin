@@ -614,7 +614,8 @@ struct GridView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
+            .padding(.leading, 36)
+            .padding(.trailing, 36)
             .frame(height: 26)
             .background(Color(NSColor.windowBackgroundColor))
         }
@@ -1075,10 +1076,12 @@ struct GridView: View {
             cell.input = "=\(name)("
             formulaBarText = cell.input
             viewModel.objectWillChange.send()
-        } else if let selected = selectedCell {
-            originalEditInput = viewModel.cells[selected.row][selected.col].input
-            viewModel.cells[selected.row][selected.col].input = "=\(name)("
-            currentEditingCell = selected
+        } else {
+            let target = selectedCell ?? (row: 0, col: 0)
+            selectedCell = target
+            originalEditInput = viewModel.cells[target.row][target.col].input
+            viewModel.cells[target.row][target.col].input = "=\(name)("
+            currentEditingCell = target
             formulaBarText = "=\(name)("
             selectionState.clearSelection()
         }
