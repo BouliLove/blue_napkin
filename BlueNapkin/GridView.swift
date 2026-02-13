@@ -242,7 +242,23 @@ class GridViewModel: ObservableObject {
             }
         }
 
+        // Set displayValue for all non-formula cells first so getCellValue
+        // returns correct values when formula cells are evaluated below.
+        for r in 0..<rows {
+            for c in 0..<columns {
+                let cell = cells[r][c]
+                if !cell.input.hasPrefix("=") {
+                    cell.displayValue = cell.input
+                    cell.hasError = false
+                }
+            }
+        }
+
         var queue: [CellKey] = []
+        // Seed with non-formula cells that are referenced by formulas (source nodes)
+        for dep in reverseAdj.keys where deps[dep] == nil {
+            queue.append(dep)
+        }
         for (cell, degree) in inDegree where degree == 0 {
             queue.append(cell)
         }
@@ -266,24 +282,19 @@ class GridViewModel: ObservableObject {
 
         let circularCells = Set(deps.keys.filter { !evalOrder.contains($0) })
 
-        // Evaluate in topological order
+        // Evaluate formula cells in topological order
         for cellKey in evalOrder {
             let r = cellKey / columns, c = cellKey % columns
-            cells[r][c].evaluate(using: formulaEngine, getCellValue: getCellValue)
+            if cells[r][c].input.hasPrefix("=") {
+                cells[r][c].evaluate(using: formulaEngine, getCellValue: getCellValue)
+            }
         }
 
-        // Also evaluate non-formula cells and plain values
-        for r in 0..<rows {
-            for c in 0..<columns {
-                let cell = cells[r][c]
-                if circularCells.contains(key(r, c)) {
-                    cell.displayValue = "#ERROR"
-                    cell.hasError = true
-                } else if !cell.input.hasPrefix("=") {
-                    cell.displayValue = cell.input
-                    cell.hasError = false
-                }
-            }
+        // Mark circular cells as errors
+        for cellKey in circularCells {
+            let r = cellKey / columns, c = cellKey % columns
+            cells[r][c].displayValue = "#ERROR"
+            cells[r][c].hasError = true
         }
 
         objectWillChange.send()
