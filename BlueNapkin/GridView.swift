@@ -854,13 +854,13 @@ struct GridView: View {
     private func exportCSV() {
         let csv = viewModel.exportCSV()
         guard !csv.isEmpty else { return }
+        NSApp.activate(ignoringOtherApps: true)
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.nameFieldStringValue = "BlueNapkin.csv"
-        panel.begin { response in
-            if response == .OK, let url = panel.url {
-                try? csv.write(to: url, atomically: true, encoding: .utf8)
-            }
+        panel.level = .floating
+        if panel.runModal() == .OK, let url = panel.url {
+            try? csv.write(to: url, atomically: true, encoding: .utf8)
         }
     }
 
