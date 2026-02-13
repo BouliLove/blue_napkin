@@ -823,12 +823,13 @@ struct GridView: View {
 
     private func pasteCell(row: Int, col: Int) {
         guard let content = NSPasteboard.general.string(forType: .string) else { return }
-        let rows = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rows = trimmed.components(separatedBy: "\n").filter { !$0.isEmpty }
         if rows.count > 1 || rows.first?.contains("\t") == true {
             pasteMultiCell(content: rows, startRow: row, startCol: col)
         } else {
             viewModel.withUndo(row: row, col: col) {
-                viewModel.cells[row][col].input = content
+                viewModel.cells[row][col].input = trimmed
             }
             viewModel.updateCell(at: row, column: col)
         }
@@ -843,7 +844,7 @@ struct GridView: View {
                 let targetCol = startCol + colOffset
                 guard targetRow < viewModel.rows, targetCol < viewModel.columns else { continue }
                 viewModel.recordCellChange(row: targetRow, col: targetCol)
-                viewModel.cells[targetRow][targetCol].input = value
+                viewModel.cells[targetRow][targetCol].input = value.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
         viewModel.commitChangeGroup()
