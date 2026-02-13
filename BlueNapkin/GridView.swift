@@ -410,6 +410,10 @@ struct GridView: View {
     @State private var hoveredFunction: String?
     @State private var formulaBarText: String = ""
 
+    private static let brandBlue = Color(red: 0.38, green: 0.56, blue: 0.82)
+    private static let headerBg = Color(red: 0.95, green: 0.96, blue: 0.975)
+    private static let formulaBarBg = Color(red: 0.96, green: 0.97, blue: 0.98)
+
     @State private var columnWidths: [CGFloat] = []
     let defaultCellWidth: CGFloat = 80
     let minCellWidth: CGFloat = 40
@@ -440,20 +444,20 @@ struct GridView: View {
                 // Column headers
                 HStack(spacing: 0) {
                     Rectangle()
-                        .fill(Color(NSColor.windowBackgroundColor))
+                        .fill(Self.headerBg)
                         .frame(width: headerWidth, height: headerHeight)
                         .overlay(alignment: .bottom) {
-                            Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
+                            Self.brandBlue.opacity(0.2).frame(height: 0.5)
                         }
 
                     ForEach(0..<viewModel.columns, id: \.self) { col in
                         Text(columnName(col))
                             .font(.system(size: 10, weight: .medium, design: .default))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Self.brandBlue.opacity(0.8))
                             .frame(width: colWidth(col), height: headerHeight)
-                            .background(Color(NSColor.windowBackgroundColor))
+                            .background(Self.headerBg)
                             .overlay(alignment: .bottom) {
-                                Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
+                                Self.brandBlue.opacity(0.2).frame(height: 0.5)
                             }
                             .overlay(alignment: .trailing) {
                                 // Drag handle for column resizing
@@ -486,11 +490,11 @@ struct GridView: View {
                     HStack(spacing: 0) {
                         Text("\(row + 1)")
                             .font(.system(size: 10, weight: .medium).monospacedDigit())
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Self.brandBlue.opacity(0.8))
                             .frame(width: headerWidth, height: cellHeight)
-                            .background(Color(NSColor.windowBackgroundColor))
+                            .background(Self.headerBg)
                             .overlay(alignment: .trailing) {
-                                Color(NSColor.separatorColor).opacity(0.3).frame(width: 0.5)
+                                Self.brandBlue.opacity(0.2).frame(width: 0.5)
                             }
 
                         ForEach(0..<viewModel.columns, id: \.self) { col in
@@ -586,7 +590,7 @@ struct GridView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Color(NSColor.separatorColor).opacity(0.4).frame(height: 0.5)
+            Self.brandBlue.opacity(0.25).frame(height: 0.5)
 
             // Formula bar
             HStack(spacing: 6) {
@@ -617,7 +621,7 @@ struct GridView: View {
             .padding(.leading, 36)
             .padding(.trailing, 36)
             .frame(height: 26)
-            .background(Color(NSColor.windowBackgroundColor))
+            .background(Self.formulaBarBg)
         }
         .onAppear {
             if columnWidths.isEmpty {
@@ -1123,7 +1127,8 @@ struct CellView: View, Equatable {
         lhs.inputValue == rhs.inputValue
     }
 
-    private static let gridLine = Color(NSColor.separatorColor).opacity(0.4)
+    private static let brandBlue = Color(red: 0.38, green: 0.56, blue: 0.82)
+    private static let gridLine = brandBlue.opacity(0.12)
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -1169,23 +1174,23 @@ struct CellView: View, Equatable {
 
     private var backgroundColor: Color {
         if isEditing {
-            return Color(NSColor.controlBackgroundColor)
+            return .white
         } else if isSelected {
-            return Color.accentColor.opacity(0.10)
+            return Self.brandBlue.opacity(0.10)
         } else if isCursorCell {
-            return Color.accentColor.opacity(0.04)
+            return Self.brandBlue.opacity(0.04)
         } else if row % 2 == 1 {
-            return Color(NSColor.controlBackgroundColor).opacity(0.5)
+            return Color(red: 0.97, green: 0.975, blue: 0.985)
         } else {
-            return .clear
+            return Color(red: 0.985, green: 0.988, blue: 0.993)
         }
     }
 
     private var focusBorderColor: Color {
         if isCursorCell || isEditing {
-            return Color.accentColor
+            return Self.brandBlue
         } else if isSelected {
-            return Color.accentColor.opacity(0.35)
+            return Self.brandBlue.opacity(0.35)
         } else {
             return .clear
         }

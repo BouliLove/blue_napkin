@@ -70,6 +70,7 @@ class MenuBarController: NSObject, ObservableObject {
         panel.level = .floating
         panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.appearance = NSAppearance(named: .aqua)
         let hostingController = NSHostingController(rootView: ContentView())
         hostingController.preferredContentSize = NSSize(width: 600, height: 400)
         panel.contentViewController = hostingController

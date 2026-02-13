@@ -4,6 +4,8 @@ import AppKit
 extension Notification.Name {
     static let exportCSV = Notification.Name("BlueNapkin.exportCSV")
     static let setCellFormat = Notification.Name("BlueNapkin.setCellFormat")
+    static let increaseDecimals = Notification.Name("BlueNapkin.increaseDecimals")
+    static let decreaseDecimals = Notification.Name("BlueNapkin.decreaseDecimals")
 }
 
 /// Transparent view that enables window dragging when placed in the title bar.
@@ -72,6 +74,9 @@ struct WindowResizeHandle: NSViewRepresentable {
 }
 
 struct ContentView: View {
+    private static let brandBlue = Color(red: 0.38, green: 0.56, blue: 0.82)
+    private static let titleBarBg = Color(red: 0.96, green: 0.97, blue: 0.98)
+
     var body: some View {
         VStack(spacing: 0) {
             // Title bar (draggable)
@@ -81,7 +86,7 @@ struct ContentView: View {
                 HStack(spacing: 6) {
                     Text("BlueNapkin")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary.opacity(0.7))
+                        .foregroundColor(Self.brandBlue)
                         .padding(.leading, 12)
 
                     Spacer()
@@ -102,6 +107,37 @@ struct ContentView: View {
                             .buttonStyle(PlainButtonStyle())
                             .help(format.replacingOccurrences(of: "currency", with: ""))
                         }
+                    }
+                    .padding(.trailing, 2)
+
+                    HStack(spacing: 2) {
+                        Button(action: {
+                            NotificationCenter.default.post(name: .decreaseDecimals, object: nil)
+                        }) {
+                            Text(".0")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 2)
+                                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Decrease decimals")
+
+                        Button(action: {
+                            NotificationCenter.default.post(name: .increaseDecimals, object: nil)
+                        }) {
+                            Text(".00")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 2)
+                                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Increase decimals")
                     }
                     .padding(.trailing, 6)
 
@@ -127,20 +163,21 @@ struct ContentView: View {
                 }
             }
             .frame(height: 32)
-            .background(Color(NSColor.windowBackgroundColor))
+            .background(Self.titleBarBg)
 
-            Color(NSColor.separatorColor).opacity(0.5).frame(height: 0.5)
+            Self.brandBlue.opacity(0.3).frame(height: 1)
 
             // Grid view
             GridView()
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(Color(red: 0.985, green: 0.988, blue: 0.993))
 
         }
+        .background(Self.titleBarBg)
         .frame(minWidth: 400, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5)
+                .strokeBorder(Self.brandBlue.opacity(0.2), lineWidth: 0.5)
         )
         .overlay(alignment: .bottomLeading) {
             WindowResizeHandle(corner: .bottomLeft)
