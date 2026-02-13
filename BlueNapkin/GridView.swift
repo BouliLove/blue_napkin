@@ -144,7 +144,12 @@ class GridViewModel: ObservableObject {
             formatter.maximumFractionDigits = 6
             return formatter.string(from: NSNumber(value: value)) ?? raw
         case .percentage:
-            return raw + "%"
+            let pct = value * 100
+            if pct.truncatingRemainder(dividingBy: 1) == 0 {
+                return String(format: "%.0f%%", pct)
+            } else {
+                return "\(pct)%"
+            }
         }
     }
 
