@@ -454,7 +454,7 @@ struct GridView: View {
                                 // Drag handle for column resizing
                                 Rectangle()
                                     .fill(Color.clear)
-                                    .frame(width: 6)
+                                    .frame(width: 12)
                                     .contentShape(Rectangle())
                                     .cursor(.resizeLeftRight)
                                     .gesture(

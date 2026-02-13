@@ -144,12 +144,14 @@ struct ContentView: View {
         )
         .overlay(alignment: .bottomLeading) {
             WindowResizeHandle(corner: .bottomLeft)
-                .frame(width: 16, height: 16)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
                 .cursor(.resizeUpDown)
         }
         .overlay(alignment: .bottomTrailing) {
             WindowResizeHandle(corner: .bottomRight)
-                .frame(width: 16, height: 16)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
                 .cursor(.resizeUpDown)
         }
     }
