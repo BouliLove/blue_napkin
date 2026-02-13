@@ -39,8 +39,17 @@ class CellModel: ObservableObject, Identifiable {
                 hasError = true
             }
         } else {
-            // It's a plain value
-            displayValue = input
+            // It's a plain value – strip leading zeros from numbers (e.g. "007" → "7")
+            if let number = Double(input) {
+                if number.truncatingRemainder(dividingBy: 1) == 0 && !input.contains(".") {
+                    displayValue = String(format: "%.0f", number)
+                } else {
+                    displayValue = "\(number)"
+                }
+                input = displayValue
+            } else {
+                displayValue = input
+            }
         }
     }
 }
