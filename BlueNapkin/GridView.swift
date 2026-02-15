@@ -103,15 +103,18 @@ class GridViewModel: ObservableObject {
 
     private static let storageKey = "BlueNapkin.gridData"
     private static let formatsKey = "BlueNapkin.cellFormats"
+    private static let decimalPlacesKey = "BlueNapkin.cellDecimalPlaces"
 
     // MARK: - Cell Formatting
 
     var cellFormats: [String: CellFormat] = [:]
+    var cellDecimalPlaces: [String: Int] = [:]
 
     func toggleCellFormat(row: Int, col: Int, format: CellFormat) {
         let key = "\(row),\(col)"
         if cellFormats[key] == format {
             cellFormats.removeValue(forKey: key)
+            cellDecimalPlaces.removeValue(forKey: key)
         } else {
             cellFormats[key] = format
         }
@@ -119,9 +122,27 @@ class GridViewModel: ObservableObject {
         objectWillChange.send()
     }
 
-    func formattedDisplayValue(row: Int, col: Int) -> String {
+    func adjustDecimalPlaces(row: Int, col: Int, delta: Int) {
+        let key = "\(row),\(col)"
         let raw = cells[row][col].displayValue
-        guard let format = cellFormats["\(row),\(col)"],
+        guard Double(raw) != nil else { return }
+
+        let format = cellFormats[key] ?? .number
+        cellFormats[key] = format
+
+        let defaultPlaces = defaultDecimalPlaces(for: format, raw: raw)
+        let currentPlaces = cellDecimalPlaces[key] ?? defaultPlaces
+        let nextPlaces = min(max(currentPlaces + delta, 0), 10)
+        cellDecimalPlaces[key] = nextPlaces
+
+        saveFormats()
+        objectWillChange.send()
+    }
+
+    func formattedDisplayValue(row: Int, col: Int) -> String {
+        let key = "\(row),\(col)"
+        let raw = cells[row][col].displayValue
+        guard let format = cellFormats[key],
               let value = Double(raw) else { return raw }
 
         let formatter = NumberFormatter()
@@ -130,27 +151,57 @@ class GridViewModel: ObservableObject {
 
         switch format {
         case .currencyEUR:
+            let places = cellDecimalPlaces[key] ?? 2
             formatter.numberStyle = .decimal
-            formatter.minimumFractionDigits = 2
-            formatter.maximumFractionDigits = 2
+            formatter.minimumFractionDigits = places
+            formatter.maximumFractionDigits = places
             return "€" + (formatter.string(from: NSNumber(value: value)) ?? raw)
         case .currencyUSD:
+            let places = cellDecimalPlaces[key] ?? 2
             formatter.numberStyle = .decimal
-            formatter.minimumFractionDigits = 2
-            formatter.maximumFractionDigits = 2
+            formatter.minimumFractionDigits = places
+            formatter.maximumFractionDigits = places
             return "$" + (formatter.string(from: NSNumber(value: value)) ?? raw)
         case .number:
             formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 6
+            if let places = cellDecimalPlaces[key] {
+                formatter.minimumFractionDigits = places
+                formatter.maximumFractionDigits = places
+            } else {
+                formatter.minimumFractionDigits = 0
+                formatter.maximumFractionDigits = 6
+            }
             return formatter.string(from: NSNumber(value: value)) ?? raw
         case .percentage:
             let pct = value * 100
-            if pct.truncatingRemainder(dividingBy: 1) == 0 {
-                return String(format: "%.0f%%", pct)
+            formatter.numberStyle = .decimal
+            if let places = cellDecimalPlaces[key] {
+                formatter.minimumFractionDigits = places
+                formatter.maximumFractionDigits = places
             } else {
-                return "\(pct)%"
+                formatter.minimumFractionDigits = 0
+                formatter.maximumFractionDigits = defaultDecimalPlaces(for: .percentage, raw: raw)
             }
+            return (formatter.string(from: NSNumber(value: pct)) ?? "\(pct)") + "%"
         }
+    }
+
+    private func defaultDecimalPlaces(for format: CellFormat, raw: String) -> Int {
+        switch format {
+        case .currencyEUR, .currencyUSD:
+            return 2
+        case .number:
+            return fractionDigits(in: raw)
+        case .percentage:
+            let sourceDigits = fractionDigits(in: raw)
+            return max(sourceDigits - 2, 0)
+        }
+    }
+
+    private func fractionDigits(in value: String) -> Int {
+        guard let dotIndex = value.firstIndex(of: ".") else { return 0 }
+        let decimals = value[value.index(after: dotIndex)...]
+        return min(decimals.count, 10)
     }
 
     // MARK: - Undo/Redo
@@ -213,6 +264,7 @@ class GridViewModel: ObservableObject {
     static func clearStorage() {
         UserDefaults.standard.removeObject(forKey: storageKey)
         UserDefaults.standard.removeObject(forKey: formatsKey)
+        UserDefaults.standard.removeObject(forKey: decimalPlacesKey)
     }
 
     /// Build CSV string from the grid, trimming empty trailing rows/columns.
@@ -376,6 +428,7 @@ class GridViewModel: ObservableObject {
     private func saveFormats() {
         let data = cellFormats.mapValues { $0.rawValue }
         UserDefaults.standard.set(data, forKey: Self.formatsKey)
+        UserDefaults.standard.set(cellDecimalPlaces, forKey: Self.decimalPlacesKey)
     }
 
     private func load() {
@@ -393,6 +446,11 @@ class GridViewModel: ObservableObject {
         }
         if let formatData = UserDefaults.standard.dictionary(forKey: Self.formatsKey) as? [String: String] {
             cellFormats = formatData.compactMapValues { CellFormat(rawValue: $0) }
+        }
+        if let decimalData = UserDefaults.standard.dictionary(forKey: Self.decimalPlacesKey) as? [String: Int] {
+            cellDecimalPlaces = decimalData
+        } else {
+            cellDecimalPlaces = [:]
         }
         reevaluateAllCells()
     }
@@ -650,6 +708,12 @@ struct GridView: View {
                 viewModel.toggleCellFormat(row: cell.row, col: cell.col, format: format)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .increaseDecimals)) { _ in
+            adjustSelectedDecimals(delta: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .decreaseDecimals)) { _ in
+            adjustSelectedDecimals(delta: -1)
+        }
     }
 
     // MARK: - Keyboard Event Monitor
@@ -813,6 +877,22 @@ struct GridView: View {
                 }
                 return event
             }
+        }
+    }
+
+    private func adjustSelectedDecimals(delta: Int) {
+        if let start = selectionState.selectionStart, let end = selectionState.selectionEnd {
+            let minRow = min(start.row, end.row)
+            let maxRow = max(start.row, end.row)
+            let minCol = min(start.col, end.col)
+            let maxCol = max(start.col, end.col)
+            for r in minRow...maxRow {
+                for c in minCol...maxCol {
+                    viewModel.adjustDecimalPlaces(row: r, col: c, delta: delta)
+                }
+            }
+        } else if let cell = selectedCell ?? currentEditingCell {
+            viewModel.adjustDecimalPlaces(row: cell.row, col: cell.col, delta: delta)
         }
     }
 
