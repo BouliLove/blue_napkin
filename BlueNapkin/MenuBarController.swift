@@ -76,7 +76,7 @@ class MenuBarController: NSObject, ObservableObject {
         panel.contentViewController = hostingController
         panel.setContentSize(NSSize(width: 600, height: 400))
         panel.minSize = NSSize(width: 400, height: 300)
-        panel.maxSize = NSSize(width: 1200, height: 800)
+        panel.maxSize = NSSize(width: 1800, height: 1200)
         panel.standardWindowButton(.closeButton)?.isHidden = true
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true

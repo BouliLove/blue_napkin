@@ -19,6 +19,17 @@ enum EditAction {
     case tabBack
 }
 
+struct CellsRegionShape: Shape {
+    let headerWidth: CGFloat
+    let headerHeight: CGFloat
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: headerWidth,
+                    y: headerHeight,
+                    width: max(0, rect.width - headerWidth),
+                    height: max(0, rect.height - headerHeight)))
+    }
+}
+
 // Selection state for tracking cell/range selection during formula editing
 class SelectionState: ObservableObject {
     @Published var isSelecting = false
@@ -98,6 +109,16 @@ class GridViewModel: ObservableObject {
     @Published var cells: [[CellModel]] = []
     let formulaEngine = FormulaEngine()
 
+    private let sharedFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.groupingSeparator = ","
+        f.decimalSeparator = "."
+        f.numberStyle = .decimal
+        return f
+    }()
+
+    private(set) var formattedValues: [String: String] = [:]
+
     let rows = 20
     let columns = 10
 
@@ -119,6 +140,15 @@ class GridViewModel: ObservableObject {
             cellFormats[key] = format
         }
         saveFormats()
+        rebuildFormattedValues()
+        objectWillChange.send()
+    }
+
+    func setCellFormat(row: Int, col: Int, format: CellFormat) {
+        let key = "\(row),\(col)"
+        cellFormats[key] = format
+        saveFormats()
+        rebuildFormattedValues()
         objectWillChange.send()
     }
 
@@ -136,54 +166,59 @@ class GridViewModel: ObservableObject {
         cellDecimalPlaces[key] = nextPlaces
 
         saveFormats()
+        rebuildFormattedValues()
         objectWillChange.send()
     }
 
-    func formattedDisplayValue(row: Int, col: Int) -> String {
-        let key = "\(row),\(col)"
-        let raw = cells[row][col].displayValue
-        guard let format = cellFormats[key],
-              let value = Double(raw) else { return raw }
-
-        let formatter = NumberFormatter()
-        formatter.groupingSeparator = ","
-        formatter.decimalSeparator = "."
-
-        switch format {
-        case .currencyEUR:
-            let places = cellDecimalPlaces[key] ?? 2
-            formatter.numberStyle = .decimal
-            formatter.minimumFractionDigits = places
-            formatter.maximumFractionDigits = places
-            return "€" + (formatter.string(from: NSNumber(value: value)) ?? raw)
-        case .currencyUSD:
-            let places = cellDecimalPlaces[key] ?? 2
-            formatter.numberStyle = .decimal
-            formatter.minimumFractionDigits = places
-            formatter.maximumFractionDigits = places
-            return "$" + (formatter.string(from: NSNumber(value: value)) ?? raw)
-        case .number:
-            formatter.numberStyle = .decimal
-            if let places = cellDecimalPlaces[key] {
-                formatter.minimumFractionDigits = places
-                formatter.maximumFractionDigits = places
-            } else {
-                formatter.minimumFractionDigits = 0
-                formatter.maximumFractionDigits = 6
+    func rebuildFormattedValues() {
+        var values: [String: String] = [:]
+        let f = sharedFormatter
+        for r in 0..<rows {
+            for c in 0..<columns {
+                let k = "\(r),\(c)"
+                let raw = cells[r][c].displayValue
+                guard let format = cellFormats[k], let value = Double(raw) else {
+                    values[k] = raw
+                    continue
+                }
+                switch format {
+                case .currencyEUR:
+                    let places = cellDecimalPlaces[k] ?? 2
+                    f.minimumFractionDigits = places
+                    f.maximumFractionDigits = places
+                    values[k] = "€" + (f.string(from: NSNumber(value: value)) ?? raw)
+                case .currencyUSD:
+                    let places = cellDecimalPlaces[k] ?? 2
+                    f.minimumFractionDigits = places
+                    f.maximumFractionDigits = places
+                    values[k] = "$" + (f.string(from: NSNumber(value: value)) ?? raw)
+                case .number:
+                    if let places = cellDecimalPlaces[k] {
+                        f.minimumFractionDigits = places
+                        f.maximumFractionDigits = places
+                    } else {
+                        f.minimumFractionDigits = 0
+                        f.maximumFractionDigits = 6
+                    }
+                    values[k] = f.string(from: NSNumber(value: value)) ?? raw
+                case .percentage:
+                    let pct = value * 100
+                    if let places = cellDecimalPlaces[k] {
+                        f.minimumFractionDigits = places
+                        f.maximumFractionDigits = places
+                    } else {
+                        f.minimumFractionDigits = 0
+                        f.maximumFractionDigits = defaultDecimalPlaces(for: .percentage, raw: raw)
+                    }
+                    values[k] = (f.string(from: NSNumber(value: pct)) ?? "\(pct)") + "%"
+                }
             }
-            return formatter.string(from: NSNumber(value: value)) ?? raw
-        case .percentage:
-            let pct = value * 100
-            formatter.numberStyle = .decimal
-            if let places = cellDecimalPlaces[key] {
-                formatter.minimumFractionDigits = places
-                formatter.maximumFractionDigits = places
-            } else {
-                formatter.minimumFractionDigits = 0
-                formatter.maximumFractionDigits = defaultDecimalPlaces(for: .percentage, raw: raw)
-            }
-            return (formatter.string(from: NSNumber(value: pct)) ?? "\(pct)") + "%"
         }
+        formattedValues = values
+    }
+
+    func formattedDisplayValue(row: Int, col: Int) -> String {
+        formattedValues["\(row),\(col)"] ?? cells[row][col].displayValue
     }
 
     private func defaultDecimalPlaces(for format: CellFormat, raw: String) -> Int {
@@ -407,6 +442,7 @@ class GridViewModel: ObservableObject {
             cells[r][c].hasError = true
         }
 
+        rebuildFormattedValues()
         objectWillChange.send()
     }
 
@@ -467,10 +503,50 @@ struct GridView: View {
     @State private var formulaRefLength: Int = 0
     @State private var hoveredFunction: String?
     @State private var formulaBarText: String = ""
+    @State private var isCellDragging = false
+    @State private var isHeaderDragging = false
 
     private static let brandBlue = Color(red: 0.38, green: 0.56, blue: 0.82)
     private static let headerBg = Color(red: 0.95, green: 0.96, blue: 0.975)
     private static let formulaBarBg = Color(red: 0.96, green: 0.97, blue: 0.98)
+
+    // Helper functions for header backgrounds based on selection state
+    private func columnHeaderBackground(col: Int) -> Color {
+        if let start = selectionState.selectionStart, let end = selectionState.selectionEnd {
+            let minCol = min(start.col, end.col)
+            let maxCol = max(start.col, end.col)
+            if col >= minCol && col <= maxCol {
+                return Self.brandBlue.opacity(0.15)
+            }
+        }
+        return Self.headerBg
+    }
+
+    private func rowHeaderBackground(row: Int) -> Color {
+        if let start = selectionState.selectionStart, let end = selectionState.selectionEnd {
+            let minRow = min(start.row, end.row)
+            let maxRow = max(start.row, end.row)
+            if row >= minRow && row <= maxRow {
+                return Self.brandBlue.opacity(0.15)
+            }
+        }
+        return Self.headerBg
+    }
+
+    private func cornerHeaderBackground() -> Color {
+        if let start = selectionState.selectionStart, let end = selectionState.selectionEnd {
+            let minRow = min(start.row, end.row)
+            let maxRow = max(start.row, end.row)
+            let minCol = min(start.col, end.col)
+            let maxCol = max(start.col, end.col)
+            // If entire grid is selected or any cells are selected, highlight the corner
+            if (minRow == 0 && maxRow == viewModel.rows - 1 && minCol == 0 && maxCol == viewModel.columns - 1) ||
+               (selectionState.selectionStart != nil) {
+                return Self.brandBlue.opacity(0.15)
+            }
+        }
+        return Self.headerBg
+    }
 
     @State private var columnWidths: [CGFloat] = []
     let defaultCellWidth: CGFloat = 80
@@ -495,6 +571,21 @@ struct GridView: View {
         return x
     }
 
+    private func columnAt(x: CGFloat) -> Int? {
+        if x < headerWidth { return 0 }
+        var cursor = headerWidth
+        for c in 0..<viewModel.columns {
+            cursor += colWidth(c)
+            if x < cursor { return c }
+        }
+        return viewModel.columns - 1
+    }
+
+    private func rowAt(y: CGFloat) -> Int? {
+        let r = Int((y - headerHeight) / cellHeight)
+        return max(0, min(viewModel.rows - 1, r))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
         ScrollView([.horizontal, .vertical]) {
@@ -502,10 +593,17 @@ struct GridView: View {
                 // Column headers
                 HStack(spacing: 0) {
                     Rectangle()
-                        .fill(Self.headerBg)
+                        .fill(cornerHeaderBackground())
                         .frame(width: headerWidth, height: headerHeight)
                         .overlay(alignment: .bottom) {
                             Self.brandBlue.opacity(0.2).frame(height: 0.5)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // Select all cells
+                            selectionState.startSelection(at: 0, col: 0)
+                            selectionState.updateSelection(to: viewModel.rows - 1, col: viewModel.columns - 1)
+                            selectedCell = (0, 0)
                         }
 
                     ForEach(0..<viewModel.columns, id: \.self) { col in
@@ -513,10 +611,23 @@ struct GridView: View {
                             .font(.system(size: 10, weight: .medium, design: .default))
                             .foregroundColor(Self.brandBlue.opacity(0.8))
                             .frame(width: colWidth(col), height: headerHeight)
-                            .background(Self.headerBg)
+                            .background(columnHeaderBackground(col: col))
                             .overlay(alignment: .bottom) {
                                 Self.brandBlue.opacity(0.2).frame(height: 0.5)
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectionState.startSelection(at: 0, col: col)
+                                selectionState.updateSelection(to: viewModel.rows - 1, col: col)
+                                selectedCell = (0, col)
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 4, coordinateSpace: .named("gridContent"))
+                                    .onChanged { value in
+                                        handleColumnHeaderDrag(current: value.location, originCol: col)
+                                    }
+                                    .onEnded { _ in isHeaderDragging = false }
+                            )
                             .overlay(alignment: .trailing) {
                                 // Drag handle for column resizing
                                 Rectangle()
@@ -550,10 +661,23 @@ struct GridView: View {
                             .font(.system(size: 10, weight: .medium).monospacedDigit())
                             .foregroundColor(Self.brandBlue.opacity(0.8))
                             .frame(width: headerWidth, height: cellHeight)
-                            .background(Self.headerBg)
+                            .background(rowHeaderBackground(row: row))
                             .overlay(alignment: .trailing) {
                                 Self.brandBlue.opacity(0.2).frame(width: 0.5)
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectionState.startSelection(at: row, col: 0)
+                                selectionState.updateSelection(to: row, col: viewModel.columns - 1)
+                                selectedCell = (row, 0)
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 4, coordinateSpace: .named("gridContent"))
+                                    .onChanged { value in
+                                        handleRowHeaderDrag(current: value.location, originRow: row)
+                                    }
+                                    .onEnded { _ in isHeaderDragging = false }
+                            )
 
                         ForEach(0..<viewModel.columns, id: \.self) { col in
                             CellView(
@@ -643,6 +767,25 @@ struct GridView: View {
                                 }
                         )
                         .allowsHitTesting(true)
+                } else {
+                    Color.clear
+                        .contentShape(CellsRegionShape(headerWidth: headerWidth,
+                                                       headerHeight: headerHeight))
+                        .onTapGesture { location in
+                            if let cell = cellAt(location: location) {
+                                handleCellClick(row: cell.row, col: cell.col)
+                            }
+                        }
+                        .gesture(
+                            DragGesture(minimumDistance: 4, coordinateSpace: .named("gridContent"))
+                                .onChanged { value in
+                                    handleCellDrag(start: value.startLocation,
+                                                   current: value.location)
+                                }
+                                .onEnded { _ in
+                                    isCellDragging = false
+                                }
+                        )
                 }
             }
         }
@@ -699,9 +842,14 @@ struct GridView: View {
                 let maxRow = max(start.row, end.row)
                 let minCol = min(start.col, end.col)
                 let maxCol = max(start.col, end.col)
+                let isSingleCell = (minRow == maxRow && minCol == maxCol)
                 for r in minRow...maxRow {
                     for c in minCol...maxCol {
-                        viewModel.toggleCellFormat(row: r, col: c, format: format)
+                        if isSingleCell {
+                            viewModel.toggleCellFormat(row: r, col: c, format: format)
+                        } else {
+                            viewModel.setCellFormat(row: r, col: c, format: format)
+                        }
                     }
                 }
             } else if let cell = selectedCell ?? currentEditingCell {
@@ -965,6 +1113,43 @@ struct GridView: View {
         }
     }
 
+    // MARK: - Mouse Drag Selection
+
+    private func handleCellDrag(start: CGPoint, current: CGPoint) {
+        guard currentEditingCell == nil else { return }
+        guard let anchor = cellAt(location: start) else { return }
+        let target = cellAt(location: current) ?? anchor
+
+        if !isCellDragging {
+            isCellDragging = true
+            selectionState.startSelection(at: anchor.row, col: anchor.col)
+            selectedCell = anchor
+        }
+        selectionState.updateSelection(to: target.row, col: target.col)
+    }
+
+    private func handleColumnHeaderDrag(current: CGPoint, originCol: Int) {
+        let endCol = columnAt(x: current.x) ?? originCol
+        if !isHeaderDragging {
+            isHeaderDragging = true
+            selectionState.startSelection(at: 0, col: originCol)
+            selectedCell = (0, originCol)
+        }
+        selectionState.selectionStart = (0, originCol)
+        selectionState.selectionEnd = (viewModel.rows - 1, endCol)
+    }
+
+    private func handleRowHeaderDrag(current: CGPoint, originRow: Int) {
+        let endRow = rowAt(y: current.y) ?? originRow
+        if !isHeaderDragging {
+            isHeaderDragging = true
+            selectionState.startSelection(at: originRow, col: 0)
+            selectedCell = (originRow, 0)
+        }
+        selectionState.selectionStart = (originRow, 0)
+        selectionState.selectionEnd = (endRow, viewModel.columns - 1)
+    }
+
     // MARK: - Cell Click Handling
 
     private func handleCellClick(row: Int, col: Int) {
@@ -1000,11 +1185,15 @@ struct GridView: View {
                 selectedCell = (row, col)
             }
         } else if selectedCell?.row == row && selectedCell?.col == col {
-            // Click on already-selected cell → enter edit mode
-            originalEditInput = viewModel.cells[row][col].input
-            currentEditingCell = (row, col)
-            formulaBarText = viewModel.cells[row][col].input
-            selectionState.clearSelection()
+            if selectionState.selectionStart != nil {
+                // A range is active; collapse to this single cell instead of editing.
+                selectionState.clearSelection()
+            } else {
+                // Click on already-selected cell → enter edit mode
+                originalEditInput = viewModel.cells[row][col].input
+                currentEditingCell = (row, col)
+                formulaBarText = viewModel.cells[row][col].input
+            }
         } else {
             selectedCell = (row, col)
             selectionState.clearSelection()
