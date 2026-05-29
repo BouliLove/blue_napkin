@@ -45,21 +45,36 @@ enum ResizeRegion {
     }
 }
 
-/// Pure-SwiftUI resize handle for a window edge or corner.
-/// Uses DragGesture + contentShape so hit-testing works even on a
-/// transparent non-opaque panel where AppKit would let clicks fall through.
+/// Captures the hosting NSWindow from inside the SwiftUI view tree.
+private struct WindowFinder: NSViewRepresentable {
+    let onWindow: (NSWindow) -> Void
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { if let w = v.window { onWindow(w) } }
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { if let w = nsView.window { onWindow(w) } }
+    }
+}
+
+/// Resize handle for a window edge or corner.
+/// Uses Color.primary.opacity(0.001) instead of Color.clear so that AppKit's
+/// window-level alpha hit-testing (non-opaque panel) does not swallow clicks.
 struct ResizeHandle: View {
     let region: ResizeRegion
     @State private var isDragging = false
     @State private var initialFrame: NSRect = .zero
+    @State private var hostWindow: NSWindow?
 
     var body: some View {
-        Color.clear
+        Color.primary.opacity(0.001)
+            .background(WindowFinder { hostWindow = $0 })
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
-                        guard let window = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) else { return }
+                        guard let window = hostWindow else { return }
                         if !isDragging {
                             isDragging = true
                             initialFrame = window.frame
