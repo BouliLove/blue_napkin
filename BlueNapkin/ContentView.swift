@@ -45,77 +45,80 @@ enum ResizeRegion {
     }
 }
 
-/// Invisible resize handle for a window edge or corner. Drag to resize.
-struct WindowResizeHandle: NSViewRepresentable {
+/// Pure-SwiftUI resize handle for a window edge or corner.
+/// Uses DragGesture + contentShape so hit-testing works even on a
+/// transparent non-opaque panel where AppKit would let clicks fall through.
+struct ResizeHandle: View {
     let region: ResizeRegion
+    @State private var isDragging = false
+    @State private var initialFrame: NSRect = .zero
 
-    func makeNSView(context: Context) -> NSView { ResizeView(region: region) }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    var body: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        guard let window = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) else { return }
+                        if !isDragging {
+                            isDragging = true
+                            initialFrame = window.frame
+                        }
+                        applyResize(to: window, translation: value.translation)
+                    }
+                    .onEnded { _ in isDragging = false }
+            )
+            .cursor(region.nsCursor)
+    }
 
-    private class ResizeView: NSView {
-        let region: ResizeRegion
-        private var initialFrame: NSRect = .zero
-        private var initialMouse: NSPoint = .zero
+    private func applyResize(to window: NSWindow, translation: CGSize) {
+        var frame = initialFrame
+        let tx = translation.width
+        // SwiftUI y is downward; screen y is upward — sign is intentionally
+        // positive for bottom (drag down → taller) and negative for top.
+        let ty = translation.height
+        let minW = window.minSize.width, maxW = window.maxSize.width
+        let minH = window.minSize.height, maxH = window.maxSize.height
 
-        init(region: ResizeRegion) {
-            self.region = region
-            super.init(frame: .zero)
+        switch region {
+        case .right:
+            frame.size.width = max(minW, min(maxW, initialFrame.width + tx))
+        case .left:
+            let newW = max(minW, min(maxW, initialFrame.width - tx))
+            frame.origin.x = initialFrame.maxX - newW
+            frame.size.width = newW
+        case .bottom:
+            let newH = max(minH, min(maxH, initialFrame.height + ty))
+            frame.origin.y = initialFrame.maxY - newH
+            frame.size.height = newH
+        case .top:
+            let newH = max(minH, min(maxH, initialFrame.height - ty))
+            frame.size.height = newH
+        case .bottomRight:
+            frame.size.width = max(minW, min(maxW, initialFrame.width + tx))
+            let newH = max(minH, min(maxH, initialFrame.height + ty))
+            frame.origin.y = initialFrame.maxY - newH
+            frame.size.height = newH
+        case .bottomLeft:
+            let newW = max(minW, min(maxW, initialFrame.width - tx))
+            frame.origin.x = initialFrame.maxX - newW
+            frame.size.width = newW
+            let newH = max(minH, min(maxH, initialFrame.height + ty))
+            frame.origin.y = initialFrame.maxY - newH
+            frame.size.height = newH
+        case .topRight:
+            frame.size.width = max(minW, min(maxW, initialFrame.width + tx))
+            let newH = max(minH, min(maxH, initialFrame.height - ty))
+            frame.size.height = newH
+        case .topLeft:
+            let newW = max(minW, min(maxW, initialFrame.width - tx))
+            frame.origin.x = initialFrame.maxX - newW
+            frame.size.width = newW
+            let newH = max(minH, min(maxH, initialFrame.height - ty))
+            frame.size.height = newH
         }
-        required init?(coder: NSCoder) { fatalError() }
 
-        override func mouseDown(with event: NSEvent) {
-            guard let window = window else { return }
-            initialFrame = window.frame
-            initialMouse = NSEvent.mouseLocation
-        }
-
-        override func mouseDragged(with event: NSEvent) {
-            guard let window = window else { return }
-            let mouse = NSEvent.mouseLocation
-            let dx = mouse.x - initialMouse.x
-            let dy = mouse.y - initialMouse.y
-
-            var frame = initialFrame
-            let minW = window.minSize.width, maxW = window.maxSize.width
-            let minH = window.minSize.height, maxH = window.maxSize.height
-
-            switch region {
-            case .right:
-                frame.size.width = max(minW, min(maxW, initialFrame.width + dx))
-            case .left:
-                let newW = max(minW, min(maxW, initialFrame.width - dx))
-                frame.origin.x = initialFrame.maxX - newW
-                frame.size.width = newW
-            case .bottom:
-                let newH = max(minH, min(maxH, initialFrame.height - dy))
-                frame.origin.y = initialFrame.maxY - newH
-                frame.size.height = newH
-            case .top:
-                frame.size.height = max(minH, min(maxH, initialFrame.height + dy))
-            case .bottomRight:
-                frame.size.width = max(minW, min(maxW, initialFrame.width + dx))
-                let newH = max(minH, min(maxH, initialFrame.height - dy))
-                frame.origin.y = initialFrame.maxY - newH
-                frame.size.height = newH
-            case .bottomLeft:
-                let newW = max(minW, min(maxW, initialFrame.width - dx))
-                frame.origin.x = initialFrame.maxX - newW
-                frame.size.width = newW
-                let newH = max(minH, min(maxH, initialFrame.height - dy))
-                frame.origin.y = initialFrame.maxY - newH
-                frame.size.height = newH
-            case .topRight:
-                frame.size.width = max(minW, min(maxW, initialFrame.width + dx))
-                frame.size.height = max(minH, min(maxH, initialFrame.height + dy))
-            case .topLeft:
-                let newW = max(minW, min(maxW, initialFrame.width - dx))
-                frame.origin.x = initialFrame.maxX - newW
-                frame.size.width = newW
-                frame.size.height = max(minH, min(maxH, initialFrame.height + dy))
-            }
-
-            window.setFrame(frame, display: true, animate: false)
-        }
+        window.setFrame(frame, display: true, animate: false)
     }
 }
 
@@ -227,50 +230,50 @@ struct ContentView: View {
         )
         // Edge strips — 5pt, full span
         .overlay(alignment: .top) {
-            WindowResizeHandle(region: .top)
+            ResizeHandle(region:.top)
                 .frame(height: 5).frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.top.nsCursor)
         }
         .overlay(alignment: .bottom) {
-            WindowResizeHandle(region: .bottom)
+            ResizeHandle(region:.bottom)
                 .frame(height: 5).frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.bottom.nsCursor)
         }
         .overlay(alignment: .leading) {
-            WindowResizeHandle(region: .left)
+            ResizeHandle(region:.left)
                 .frame(width: 5).frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.left.nsCursor)
         }
         .overlay(alignment: .trailing) {
-            WindowResizeHandle(region: .right)
+            ResizeHandle(region:.right)
                 .frame(width: 5).frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.right.nsCursor)
         }
         // Corners — 14×14pt, placed after edges for hit-test priority
         .overlay(alignment: .topLeading) {
-            WindowResizeHandle(region: .topLeft)
+            ResizeHandle(region:.topLeft)
                 .frame(width: 14, height: 14)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.topLeft.nsCursor)
         }
         .overlay(alignment: .topTrailing) {
-            WindowResizeHandle(region: .topRight)
+            ResizeHandle(region:.topRight)
                 .frame(width: 14, height: 14)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.topRight.nsCursor)
         }
         .overlay(alignment: .bottomLeading) {
-            WindowResizeHandle(region: .bottomLeft)
+            ResizeHandle(region:.bottomLeft)
                 .frame(width: 14, height: 14)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.bottomLeft.nsCursor)
         }
         .overlay(alignment: .bottomTrailing) {
-            WindowResizeHandle(region: .bottomRight)
+            ResizeHandle(region:.bottomRight)
                 .frame(width: 14, height: 14)
                 .contentShape(Rectangle())
                 .cursor(ResizeRegion.bottomRight.nsCursor)
