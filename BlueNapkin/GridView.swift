@@ -818,9 +818,12 @@ struct GridView: View {
                     tipText
                 }
                 Spacer(minLength: 0)
+                Text("v\(appVersion)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(Color(NSColor.quaternaryLabelColor))
             }
             .padding(.leading, 36)
-            .padding(.trailing, 36)
+            .padding(.trailing, 12)
             .frame(height: 26)
             .background(Self.formulaBarBg)
         }
