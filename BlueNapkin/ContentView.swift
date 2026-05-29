@@ -10,10 +10,7 @@ extension Notification.Name {
 
 /// Transparent view that enables window dragging when placed in the title bar.
 struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = DraggableView()
-        return view
-    }
+    func makeNSView(context: Context) -> NSView { DraggableView() }
     func updateNSView(_ nsView: NSView, context: Context) {}
 
     private class DraggableView: NSView {
@@ -23,122 +20,8 @@ struct WindowDragArea: NSViewRepresentable {
     }
 }
 
-enum ResizeRegion {
-    case top, bottom, left, right
-    case topLeft, topRight, bottomLeft, bottomRight
-
-    var nsCursor: NSCursor {
-        if #available(macOS 15.0, *) {
-            switch self {
-            case .top, .bottom:    return .resizeUpDown
-            case .left, .right:    return .resizeLeftRight
-            case .topLeft:         return .frameResize(position: .topLeft, directions: .all)
-            case .topRight:        return .frameResize(position: .topRight, directions: .all)
-            case .bottomLeft:      return .frameResize(position: .bottomLeft, directions: .all)
-            case .bottomRight:     return .frameResize(position: .bottomRight, directions: .all)
-            }
-        }
-        switch self {
-        case .top, .bottom: return .resizeUpDown
-        default:            return .resizeLeftRight
-        }
-    }
-}
-
-/// Captures the hosting NSWindow from inside the SwiftUI view tree.
-private struct WindowFinder: NSViewRepresentable {
-    let onWindow: (NSWindow) -> Void
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async { if let w = v.window { onWindow(w) } }
-        return v
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { if let w = nsView.window { onWindow(w) } }
-    }
-}
-
-/// Resize handle for a window edge or corner.
-/// Uses Color.primary.opacity(0.001) instead of Color.clear so that AppKit's
-/// window-level alpha hit-testing (non-opaque panel) does not swallow clicks.
-struct ResizeHandle: View {
-    let region: ResizeRegion
-    @State private var isDragging = false
-    @State private var initialFrame: NSRect = .zero
-    @State private var hostWindow: NSWindow?
-
-    var body: some View {
-        Color.primary.opacity(0.001)
-            .background(WindowFinder { hostWindow = $0 })
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        guard let window = hostWindow else { return }
-                        if !isDragging {
-                            isDragging = true
-                            initialFrame = window.frame
-                        }
-                        applyResize(to: window, translation: value.translation)
-                    }
-                    .onEnded { _ in isDragging = false }
-            )
-            .cursor(region.nsCursor)
-    }
-
-    private func applyResize(to window: NSWindow, translation: CGSize) {
-        var frame = initialFrame
-        let tx = translation.width
-        // SwiftUI y is downward; screen y is upward — sign is intentionally
-        // positive for bottom (drag down → taller) and negative for top.
-        let ty = translation.height
-        let minW = window.minSize.width, maxW = window.maxSize.width
-        let minH = window.minSize.height, maxH = window.maxSize.height
-
-        switch region {
-        case .right:
-            frame.size.width = max(minW, min(maxW, initialFrame.width + tx))
-        case .left:
-            let newW = max(minW, min(maxW, initialFrame.width - tx))
-            frame.origin.x = initialFrame.maxX - newW
-            frame.size.width = newW
-        case .bottom:
-            let newH = max(minH, min(maxH, initialFrame.height + ty))
-            frame.origin.y = initialFrame.maxY - newH
-            frame.size.height = newH
-        case .top:
-            let newH = max(minH, min(maxH, initialFrame.height - ty))
-            frame.size.height = newH
-        case .bottomRight:
-            frame.size.width = max(minW, min(maxW, initialFrame.width + tx))
-            let newH = max(minH, min(maxH, initialFrame.height + ty))
-            frame.origin.y = initialFrame.maxY - newH
-            frame.size.height = newH
-        case .bottomLeft:
-            let newW = max(minW, min(maxW, initialFrame.width - tx))
-            frame.origin.x = initialFrame.maxX - newW
-            frame.size.width = newW
-            let newH = max(minH, min(maxH, initialFrame.height + ty))
-            frame.origin.y = initialFrame.maxY - newH
-            frame.size.height = newH
-        case .topRight:
-            frame.size.width = max(minW, min(maxW, initialFrame.width + tx))
-            let newH = max(minH, min(maxH, initialFrame.height - ty))
-            frame.size.height = newH
-        case .topLeft:
-            let newW = max(minW, min(maxW, initialFrame.width - tx))
-            frame.origin.x = initialFrame.maxX - newW
-            frame.size.width = newW
-            let newH = max(minH, min(maxH, initialFrame.height - ty))
-            frame.size.height = newH
-        }
-
-        window.setFrame(frame, display: true, animate: false)
-    }
-}
-
 struct ContentView: View {
-    private static let brandBlue = Color(red: 0.38, green: 0.56, blue: 0.82)
+    private static let brandBlue  = Color(red: 0.38, green: 0.56, blue: 0.82)
     private static let titleBarBg = Color(red: 0.96, green: 0.97, blue: 0.98)
 
     var body: some View {
@@ -231,73 +114,16 @@ struct ContentView: View {
 
             Self.brandBlue.opacity(0.3).frame(height: 1)
 
-            // Grid view
             GridView()
                 .background(Color(red: 0.985, green: 0.988, blue: 0.993))
-
         }
         .background(Self.titleBarBg)
         .frame(minWidth: 400, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Self.brandBlue.opacity(0.2), lineWidth: 0.5)
-        )
-        // Edge strips — 5pt, full span
-        .overlay(alignment: .top) {
-            ResizeHandle(region:.top)
-                .frame(height: 5).frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.top.nsCursor)
-        }
-        .overlay(alignment: .bottom) {
-            ResizeHandle(region:.bottom)
-                .frame(height: 5).frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.bottom.nsCursor)
-        }
-        .overlay(alignment: .leading) {
-            ResizeHandle(region:.left)
-                .frame(width: 5).frame(maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.left.nsCursor)
-        }
-        .overlay(alignment: .trailing) {
-            ResizeHandle(region:.right)
-                .frame(width: 5).frame(maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.right.nsCursor)
-        }
-        // Corners — 14×14pt, placed after edges for hit-test priority
-        .overlay(alignment: .topLeading) {
-            ResizeHandle(region:.topLeft)
-                .frame(width: 14, height: 14)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.topLeft.nsCursor)
-        }
-        .overlay(alignment: .topTrailing) {
-            ResizeHandle(region:.topRight)
-                .frame(width: 14, height: 14)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.topRight.nsCursor)
-        }
-        .overlay(alignment: .bottomLeading) {
-            ResizeHandle(region:.bottomLeft)
-                .frame(width: 14, height: 14)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.bottomLeft.nsCursor)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            ResizeHandle(region:.bottomRight)
-                .frame(width: 14, height: 14)
-                .contentShape(Rectangle())
-                .cursor(ResizeRegion.bottomRight.nsCursor)
-        }
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Self.brandBlue.opacity(0.2), lineWidth: 0.5))
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
+    static var previews: some View { ContentView() }
 }
